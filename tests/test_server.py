@@ -320,3 +320,34 @@ def test_running_state_speeds_only_read_polling(tmp_path):
     gateway.states["a"]["state"]["idle_confirmed"] = True
     assert gateway.poll_delay() == gateway.poll_interval
     gateway.db.close()
+
+
+def test_stop_can_wait_once_for_same_toilet_but_never_interrupts_other_device(tmp_path):
+    async def run():
+        started, release = asyncio.Event(), asyncio.Event()
+        calls = []
+
+        async def operation(identifier, action=None):
+            calls.append(action)
+            if action == "lid_open":
+                started.set()
+                await release.wait()
+            return {"state": {"lid": "open", "idle_confirmed": True}}
+
+        cfg = config()
+        for device in cfg["devices"].values():
+            device["actions"].append("stop")
+        gateway = Gateway(cfg, tmp_path / "ledger.db", operation)
+        first = asyncio.create_task(gateway.dispatch(command()))
+        await started.wait()
+        assert (await gateway.dispatch({**command("b"), "action": "stop"}))[0] == 409
+        stop = asyncio.create_task(gateway.dispatch({**command(), "action": "stop"}))
+        await asyncio.sleep(0)
+        assert calls == ["lid_open"]
+        assert (await gateway.dispatch(command()))[0] == 409
+        release.set()
+        assert (await first)[0] == (await stop)[0] == 200
+        assert calls == ["lid_open", "stop"]
+        gateway.db.close()
+
+    asyncio.run(run())
