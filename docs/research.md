@@ -65,7 +65,7 @@
 
 ## OneConnect 单子设备、多服务备用路线
 
-已审阅 [xiasi0/ha-oneconnect-bridge](https://github.com/xiasi0/ha-oneconnect-bridge) 的固定版本 README、默认映射、服务注册表和贡献文档。它以一个 child 包含多个 services 和 bindings 的 YAML 建模，结构上符合“一台设备一张卡片”。基于 Python 的实现也有望避开现有 C 库的 gcompat 依赖，但尚未安装或现场测试。
+已审阅 [xiasi0/ha-oneconnect-bridge](https://github.com/xiasi0/ha-oneconnect-bridge) 的固定版本 README、默认映射、服务注册表和贡献文档。它以一个 child 包含多个 services 和 bindings 的 YAML 建模，结构上符合“一台设备一张卡片”。本项目的受限扩展已部署，父网关与主设备注册成功，用户确认原生页面正常打开；功能及稳定性验收见实验记录。新实现采用 Python，尚未通过 Core 镜像更新验证依赖恢复。
 
 固定版本 `95b63b78ae4963e942920e839c5b802697503690` 的上游服务注册表没有 `offSeatAction`、`toiletLidStatus`、`toiletSetting` 等马桶服务。本项目已编写七项服务的受限适配并完成隔离检查，详见[单卡片实验](oneconnect-experiment.md)。仅填写 `prod_id: 2QBR` 不会自动获得对应驱动；页面、云端注册和双向操作仍需要验收。构建器将上游默认的无关汽车测试模型替换为空映射。
 
@@ -73,4 +73,4 @@
 
 另审阅 [chaosl1996 分支](https://github.com/chaosl1996/ha-oneconnect-bridge) README：GUI 按选中实体生成子设备，默认行为不满足本项目分组要求；应采用已审查的手动单 child 多服务映射，不能直接全选实体导出。
 
-备用实施顺序：确认官方直连结果 → 实现匹配 Profile 的必要服务适配和拒绝不支持命令 → 备份现有桥接 `.storage` 与映射 → 解决 UDP 5683 配对监听冲突 → 验证单台单卡 → 验证原身份恢复与第二台隔离。此时才安排迁移；当前保留已工作的桥接和两张翻盖卡片，没有启动另一个冲突的配对服务。
+实施顺序：核对官方直连能力 → 实现匹配 Profile 的必要服务适配和拒绝不支持命令 → 备份原桥接 `.storage` 与映射 → 解决 UDP 5683 配对监听冲突 → 验证单台单卡 → 验证原身份恢复与第二台隔离。目前已进入单台新卡片验收；原桥接停用，原绑定数据保留。没有同时运行两套配对监听。
