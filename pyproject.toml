@@ -8,13 +8,14 @@ version = "0.1.0"
 description = "Explicit-device BLE diagnostics for JOMOO and Home Assistant bridging"
 requires-python = ">=3.12"
 license = "Apache-2.0"
-dependencies = ["bleak>=3.0,<4"]
+dependencies = ["bleak>=3.0,<4", "aiohttp>=3.13,<4"]
 
 [project.optional-dependencies]
 dev = ["pytest>=9,<10", "ruff>=0.17,<0.18"]
 
 [project.scripts]
 jomoo = "jomoo_gateway.cli:main"
+jomoo-gateway = "jomoo_gateway.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
