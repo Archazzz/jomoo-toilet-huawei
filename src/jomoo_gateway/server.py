@@ -29,6 +29,8 @@ ACTIONS = frozenset(
         f"{name}_{value}"
         for name, values in {
             "foot_sensor": ("on", "off"),
+            "automatic_lid": ("on", "off"),
+            "automatic_night_light": ("on", "off"),
             "lid": ("open", "close"),
             "ring": ("open", "close"),
         }.items()

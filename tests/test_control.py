@@ -133,3 +133,52 @@ def test_unknown_observation_is_reported_without_assigning_a_meaning():
     p[5] ^= 0x10  # An actual known setting must still fail verification.
     with pytest.raises(UnsafeState):
         before.verify(snapshot(settings=p.hex(), lid=9), "lid_open")
+
+
+@pytest.mark.parametrize(
+    "feature,index,mask", [("automatic_lid", 0, 0x08), ("automatic_night_light", 2, 0x80)]
+)
+@pytest.mark.parametrize("enabled", [False, True])
+def test_parameter_update_preserves_other_fields_and_requires_readback(
+    feature, index, mask, enabled
+):
+    before = snapshot()
+    action = f"{feature}_{'on' if enabled else 'off'}"
+    frame = Frame.decode(before.packet(action))
+    assert frame.command == 0x19
+    expected_payload = bytearray.fromhex("4a52b33000100000000000")
+    expected_payload[index] = (expected_payload[index] & ~mask) | (mask if enabled else 0)
+    assert frame.payload == bytes(expected_payload)
+    changed = bytearray(before.extended)
+    changed[index] = (changed[index] & ~mask) | (mask if enabled else 0)
+    after = snapshot(settings=changed.hex())
+    assert before.verify(after, action)
+    assert after.fields()[feature] is enabled
+    assert not before.verify(snapshot(settings=changed.hex(), lid=9), action)
+    changed[index] ^= mask
+    assert not before.verify(snapshot(settings=changed.hex()), action)
+    changed[index] ^= mask
+    # Every other bit covered by the settings signature must remain unchanged.
+    signature = before.settings_signature()
+    for byte_index in range(8):
+        for bit in range(8):
+            delta = 1 << bit
+            if (byte_index, delta) == (index, mask):
+                continue
+            candidate = bytearray(changed)
+            candidate[byte_index] ^= delta
+            altered = snapshot(settings=candidate.hex())
+            probe = bytearray(before.extended)
+            probe[byte_index] ^= delta
+            if snapshot(settings=probe.hex()).settings_signature() == signature:
+                continue
+            with pytest.raises(UnsafeState, match="其他设置"):
+                before.verify(altered, action)
+
+
+@pytest.mark.parametrize("action", ["automatic_lid_off", "automatic_night_light_off"])
+def test_new_settings_reject_occupied_or_unknown_profile(action):
+    with pytest.raises(UnsafeState):
+        snapshot(seated=True).packet(action)
+    with pytest.raises(UnsafeState):
+        snapshot(settings="4b52b34511322933").packet(action)

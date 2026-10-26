@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 from .protocol import Frame, candidate_fields
 
+# FA byte and mask; these settings share the parameter-update command (0x19).
+PARAMETER_FLAGS = {"automatic_lid": (0, 0x08), "automatic_night_light": (2, 0x80)}
+
 
 class UnsafeState(ValueError):
     """The observed state cannot support a safe, verifiable operation."""
@@ -39,6 +42,12 @@ class Snapshot:
             seat_temperature_level=self.extended[1] & 7,
             dryer_temperature_level=self.extended[2] & 7,
         )
+        result.update(
+            {
+                name: bool(self.extended[index] & mask)
+                for name, (index, mask) in PARAMETER_FLAGS.items()
+            }
+        )
         return result
 
     def settings_signature(self) -> bytes:
@@ -70,6 +79,17 @@ class Snapshot:
             "ring_open": {"lid": "open", "ring": "open"},
             "ring_close": {"lid": "open", "ring": "closed"},
         }
+        targets.update(
+            {
+                f"{name}_{value}": {
+                    name: value == "on",
+                    "lid": fields["lid"],
+                    "ring": fields["ring"],
+                }
+                for name in PARAMETER_FLAGS
+                for value in ("on", "off")
+            }
+        )
         if action not in targets:
             raise UnsafeState("不支持该操作")
         return targets[action]
@@ -83,17 +103,23 @@ class Snapshot:
         # FA does not document gesture/night-light or extended nozzle bits here.
         # This model's observed profile has them clear; reject other profiles.
         if p[0] & 5 or p[1] & 8 or p[2] & 8 or not 1 <= (p[7] & 7) <= 5:
-            raise UnsafeState("FA 包含尚未验证的设置位，禁止拼装翻盖指令")
+            raise UnsafeState("FA 包含尚未验证的设置位，禁止拼装参数指令")
         if self.fields()["lid"] not in ("open", "closed") or self.fields()["ring"] not in (
             "open",
             "closed",
         ):
             raise UnsafeState("盖板或座圈状态未知")
-        operation = (
-            0x10 if target["lid"] == "closed" else (0x13 if target["ring"] == "open" else 0x11)
-        )
-        payload = bytes([p[0] & 127, p[1], p[2], (p[7] & 7) << 4, 0, p[4] & 0x70])
-        return encode(operation, payload + bytes(5))
+        payload = bytearray([p[0] & 127, p[1], p[2], (p[7] & 7) << 4, 0, p[4] & 0x70])
+        feature = action.rsplit("_", 1)[0]
+        if feature in PARAMETER_FLAGS:
+            index, mask = PARAMETER_FLAGS[feature]
+            payload[index] = (payload[index] & ~mask) | (mask if target[feature] else 0)
+            operation = 0x19
+        else:
+            operation = (
+                0x10 if target["lid"] == "closed" else (0x13 if target["ring"] == "open" else 0x11)
+            )
+        return encode(operation, bytes(payload) + bytes(5))
 
     def verify(self, after: "Snapshot", action: str) -> bool:
         expected = bytearray(self.settings_signature())
@@ -101,6 +127,11 @@ class Snapshot:
         if action.startswith("foot_sensor_"):
             expected[7] &= ~32
             observed[7] &= ~32
+        feature = action.rsplit("_", 1)[0]
+        if feature in PARAMETER_FLAGS:
+            index, mask = PARAMETER_FLAGS[feature]
+            expected[index] &= ~mask
+            observed[index] &= ~mask
         if expected != observed:
             changed = [i for i, (a, b) in enumerate(zip(expected, observed, strict=True)) if a != b]
             raise UnsafeState(f"回读发现其他设置改变（FA 字节 {changed}）；未自动重试")
