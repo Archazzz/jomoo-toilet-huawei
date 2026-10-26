@@ -188,8 +188,18 @@ class Snapshot:
             if action.startswith("move_") and state["wash_mode"] not in {"hip", "bidet", "assist"}:
                 raise UnsafeState("移动只在已确认的清洗模式中可用")
         elif self._setting(action):
-            # Keep adjustments independent of wash-mode transitions until tested.
-            self.idle()
+            feature = action.rsplit("_", 1)[0]
+            washing = state["wash_mode"] in {"hip", "bidet", "assist"}
+            if feature in {"wash_pressure", "nozzle_position"}:
+                if not state["seated"] or not washing:
+                    raise UnsafeState("水压和喷嘴位置需在真实落座清洗时调整")
+                if feature == "nozzle_position" and state["wash_moving"]:
+                    raise UnsafeState("此型号移动清洗时不能调整喷嘴位置，请先关闭移动")
+            elif feature in LEVELS and state["seated"]:
+                if state["wash_mode"] not in {"idle", "hip", "bidet", "assist", "dry"}:
+                    raise UnsafeState("当前工作模式不支持调整档位")
+            else:
+                self.idle()
         else:
             self.idle()
             if action == "self_clean" and state["lid"] != "closed":
@@ -223,6 +233,15 @@ class Snapshot:
         if action == "self_clean":
             return encode(0x1F, bytes([0x28, 128]))
         payload = self._parameters()
+        woman = action in {"wash_bidet", "wash_auto_bidet"} or (
+            self.fields()["wash_mode"] == "bidet" and action != "stop"
+        )
+        if woman:
+            p = self.extended
+            if not 1 <= (p[3] & 15) <= 5 or not 1 <= p[3] >> 4 <= 5:
+                raise UnsafeState("妇洗参数超出已知范围")
+            payload[1] = (payload[1] & 0x8F) | ((p[3] & 15) << 4)
+            payload[2] = (payload[2] & 0x8F) | (p[3] & 0xF0)
         change = self._setting(action)
         if change:
             field, index, mask, shift, value = change
@@ -233,22 +252,16 @@ class Snapshot:
                 if feature == "wash_width":
                     payload[3] = value << 4
                 else:
-                    payload[index] = (payload[index] & ~mask) | (value << shift)
+                    # FA stores female values in byte 3; the outgoing packet uses
+                    # bytes 1/2 for the active wash context, just like male values.
+                    out_index, out_mask, out_shift, _, _ = LEVELS[feature]
+                    payload[out_index] = (payload[out_index] & ~out_mask) | (value << out_shift)
         elif action in STARTS:
             operation = STARTS[action][0]
-            if action in {"wash_bidet", "wash_auto_bidet"}:
-                p = self.extended
-                if not 1 <= (p[3] & 15) <= 5 or not 1 <= p[3] >> 4 <= 5:
-                    raise UnsafeState("妇洗参数超出已知范围")
-                payload[1] = (payload[1] & 0x8F) | ((p[3] & 15) << 4)
-                payload[2] = (payload[2] & 0x8F) | (p[3] & 0xF0)
         elif action == "stop":
             operation = 0
         elif action in {"move_on", "move_off"}:
             operation = 5  # Toggle; target is checked on fresh state before any write.
-            if self.fields()["wash_mode"] == "bidet":
-                payload[1] = (payload[1] & 0x8F) | ((self.extended[3] & 15) << 4)
-                payload[2] = (payload[2] & 0x8F) | (self.extended[3] & 0xF0)
         else:
             operation = (
                 0x10 if target["lid"] == "closed" else (0x13 if target["ring"] == "open" else 0x11)

@@ -38,7 +38,11 @@ def test_stop_is_allowed_during_occupied_faulted_operation_and_needs_idle_readba
 
 @pytest.mark.parametrize("feature", LEVELS)
 def test_setting_boundaries_preserve_other_settings_and_detect_collateral_change(feature):
-    before = state()
+    before = (
+        state(occupied=True, lid=9, work=0x20)
+        if feature in {"wash_pressure", "nozzle_position"}
+        else state()
+    )
     index, mask, shift, minimum, maximum = LEVELS[feature]
     for value in range(minimum, maximum + 1):
         action = f"{feature}_{value}"
@@ -112,3 +116,23 @@ def test_finite_actions_do_not_include_reset_or_update_or_raw_write():
     for action in ("", "unknown", "water_temperature_05", "seat_temperature_100"):
         with pytest.raises(UnsafeState):
             state().packet(action)
+
+
+def test_female_adjustment_changes_female_storage_only_and_uses_wire_context():
+    before = state(occupied=True, lid=9, work=0x40)
+    for action, wire_index, fa_mask, fa_value in (
+        ("wash_pressure_2", 2, 0xF0, 0x20),
+        ("nozzle_position_2", 1, 0x0F, 2),
+    ):
+        frame = Frame.decode(before.packet(action))
+        assert frame.payload[wire_index] >> 4 & 7 == 2
+        changed = bytearray(before.extended)
+        changed[3] = (changed[3] & ~fa_mask) | fa_value
+        assert before.verify(replace(before, extended=bytes(changed)), action)
+        changed[1] ^= 0x10
+        with pytest.raises(UnsafeState, match="其他设置"):
+            before.verify(replace(before, extended=bytes(changed)), action)
+    with pytest.raises(UnsafeState, match="真实落座"):
+        state().packet("wash_pressure_2")
+    with pytest.raises(UnsafeState, match="移动清洗"):
+        state(occupied=True, lid=9, work=0xA0).packet("nozzle_position_2")
