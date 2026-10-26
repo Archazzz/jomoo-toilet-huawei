@@ -48,6 +48,26 @@ class Snapshot:
                 for name, (index, mask) in PARAMETER_FLAGS.items()
             }
         )
+        result["foam_running"] = bool(self.extended[6] & 0x04)
+        # E9 01/02 are standby only when no automatic cycle or other activity is set.
+        # Do not use the requested position or the passage of time as completion evidence.
+        result["idle_confirmed"] = (
+            self.runtime[3] in (1, 2)
+            and not (self.runtime[1] or self.runtime[2])
+            and not self.runtime[4] & 0x0C
+            and not self.runtime[5] & 0x41
+            and not self.extended[0] & 0x80
+            and not any(
+                result[key]
+                for key in (
+                    "lid_moving",
+                    "ring_moving",
+                    "small_flush_running",
+                    "large_flush_running",
+                    "foam_running",
+                )
+            )
+        )
         return result
 
     def settings_signature(self) -> bytes:

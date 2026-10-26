@@ -47,7 +47,7 @@ def main() -> None:
         p.write_text(json.dumps(mapping))
         plan = load_enabled_mapping(p)
     assert len(plan.children) == 2
-    assert all(len(c.services) == 7 for c in plan.children)
+    assert all(len(c.services) == len(SERVICE_TYPES) for c in plan.children)
     assert [c.bindings[0].entity_ids for c in plan.children] == [
         ("switch.test_a",),
         ("switch.test_b",),
@@ -78,6 +78,7 @@ def main() -> None:
                         "lid_moving": False,
                         "ring_moving": False,
                         "seated": False,
+                        "idle_confirmed": True,
                     },
                     "jomoo_actions": ["lid_open", "lid_close"],
                     "jomoo_expires_at": time.time() + 150,
@@ -92,6 +93,7 @@ def main() -> None:
         child = plan.children[0]
         data = await bridge._async_read_child_state(child)
         assert data["toiletLidStatus"] == {"status": 4}
+        assert data["toiletStatus"] == {"status": 4}
         for sid, payload in [
             ("offSeatAction", {"action": 1}),
             ("stop", {"action": 0}),
@@ -140,7 +142,7 @@ def main() -> None:
         json.dumps(
             {
                 "import": "passed",
-                "mapping": "two children, seven services each",
+                "mapping": f"two children, {len(SERVICE_TYPES)} services each",
                 "empty_default": "passed",
                 "service_routing": "passed",
                 "unsupported_preflight": "rejected without dispatch",

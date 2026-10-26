@@ -42,6 +42,10 @@
           {
             "st": "toiletSeat",
             "sid": "seatHeating"
+          },
+          {
+            "st": "status",
+            "sid": "toiletStatus"
           }
         ]
       },
@@ -84,6 +88,12 @@
         },
         {
           "sid": "seatHeating",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "toiletStatus",
           "entities": [
             "switch.REPLACE_WITH_TOILET_A_LID"
           ]
@@ -129,6 +139,10 @@
           {
             "st": "toiletSeat",
             "sid": "seatHeating"
+          },
+          {
+            "st": "status",
+            "sid": "toiletStatus"
           }
         ]
       },
@@ -171,6 +185,12 @@
         },
         {
           "sid": "seatHeating",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "toiletStatus",
           "entities": [
             "switch.REPLACE_WITH_TOILET_B_LID"
           ]

@@ -182,3 +182,20 @@ def test_new_settings_reject_occupied_or_unknown_profile(action):
         snapshot(seated=True).packet(action)
     with pytest.raises(UnsafeState):
         snapshot(settings="4b52b34511322933").packet(action)
+
+
+def test_idle_telemetry_requires_observed_standby_without_other_activity():
+    before = snapshot()
+    assert before.fields()["idle_confirmed"] is True
+    for runtime_index, value in [(3, 16), (4, 8), (5, 1), (1, 1), (2, 1)]:
+        runtime = bytearray(before.runtime)
+        runtime[runtime_index] = value
+        changed = Snapshot(before.extended, bytes(runtime), before.mechanics)
+        assert changed.fields()["idle_confirmed"] is False
+    for index, mask in [(0, 0x80), (4, 0x08), (4, 0x04), (6, 0x04)]:
+        extended = bytearray(before.extended)
+        extended[index] |= mask
+        assert not Snapshot(bytes(extended), before.runtime, before.mechanics).fields()[
+            "idle_confirmed"
+        ]
+    assert snapshot(lid=0x45).fields()["idle_confirmed"] is False

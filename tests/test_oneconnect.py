@@ -23,6 +23,7 @@ def fixture():
         "lid_moving": False,
         "ring_moving": False,
         "seated": False,
+        "idle_confirmed": True,
         "automatic_lid": True,
         "foot_sensor": True,
         "water_temperature_level": 5,
@@ -64,6 +65,7 @@ def test_same_entity_supplies_multiple_services_without_fabricated_state():
     async def run():
         expected = {
             "toiletLidStatus": {"status": 4},
+            "toiletStatus": {"status": 4},
             "seatStatus": {"status": 0},
             "toiletSetting": {"autoFoot": True, "autoOpenCover": True},
             "drySetting": {"gear": 3},
@@ -156,3 +158,15 @@ def test_read_only_settings_cannot_be_promoted_to_commands():
     with pytest.raises(ValueError):
         a.validate_service(service)
     assert not calls
+
+
+def test_work_status_never_invents_idle_for_unknown_activity():
+    hass, _, attrs = fixture()
+    a, service = adapter("toiletStatus")
+    state = attrs["jomoo_state"]
+    state["idle_confirmed"] = False
+    assert asyncio.run(a.read_state(hass, service, ("switch.toilet_a",))) == {}
+    state["large_flush_running"] = True
+    assert asyncio.run(a.read_state(hass, service, ("switch.toilet_a",))) == {"status": 107}
+    state["foam_running"] = True
+    assert asyncio.run(a.read_state(hass, service, ("switch.toilet_a",))) == {}

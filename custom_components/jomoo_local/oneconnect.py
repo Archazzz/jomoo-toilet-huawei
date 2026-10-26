@@ -11,6 +11,7 @@ from collections.abc import Mapping
 SERVICE_TYPES = {
     "offSeatAction": "action",
     "toiletLidStatus": "status",
+    "toiletStatus": "status",
     "seatStatus": "status",
     "toiletSetting": "toiletSeat",
     "drySetting": "toiletSeat",
@@ -67,6 +68,21 @@ class ToiletServiceAdapter:
         if snapshot is None:
             return {}
         state, _actions = snapshot
+        if self.service_id == "toiletStatus":
+            active = [
+                code
+                for field, code in (
+                    ("large_flush_running", 107),
+                    ("small_flush_running", 108),
+                    ("foam_running", 106),
+                )
+                if state.get(field) is True
+            ]
+            if len(active) == 1:
+                return {"status": active[0]}
+            if not active and state.get("idle_confirmed") is True:
+                return {"status": 4}
+            return {}
         if self.service_id == "toiletLidStatus":
             if state.get("lid_moving") is not False or state.get("ring_moving") is not False:
                 return {}
