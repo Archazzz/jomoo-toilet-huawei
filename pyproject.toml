@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jomoo-huawei-gateway"
+version = "0.1.0"
+description = "Explicit-device BLE diagnostics for JOMOO and Home Assistant bridging"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = ["bleak>=3.0,<4"]
+
+[project.optional-dependencies]
+dev = ["pytest>=9,<10", "ruff>=0.17,<0.18"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
