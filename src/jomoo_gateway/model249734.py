@@ -82,8 +82,11 @@ class Snapshot:
             16: "dry",
             144: "dry",
         }.get(raw)
-        if mode is None and raw & 0x60 in (0x20, 0x40):
-            mode = "assist" if r[4] & 0x20 else ("hip" if raw & 0x20 else "bidet")
+        if mode is None:
+            if r[4] & 0x20:
+                mode = "assist"
+            elif raw & 0x60 in (0x20, 0x40):
+                mode = "hip" if raw & 0x20 else "bidet"
         if r[4] & 4:  # Unsupported bath/mist mode, never guess a supported wash.
             mode = None
         result["wash_mode"] = mode or "unknown"

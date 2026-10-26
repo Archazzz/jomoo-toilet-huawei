@@ -99,6 +99,7 @@ def test_running_state_and_toggle_targets_come_from_observations():
     assert not before.verify(before, "move_on")
     assert state(occupied=True, lid=9, work=0x40, flags=8).fields()["wash_mode"] == "bidet"
     assert state(work=131).fields()["wash_mode"] == "nozzle_replace"
+    assert state(work=0, flags=0x20).fields()["wash_mode"] == "assist"
     assert state(work=255).fields()["wash_mode"] == "unknown"
     assert not state(extra=1).fields()["work_idle"]
 
