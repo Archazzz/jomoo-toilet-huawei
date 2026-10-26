@@ -67,7 +67,7 @@
 
 已审阅 [xiasi0/ha-oneconnect-bridge](https://github.com/xiasi0/ha-oneconnect-bridge) 的固定版本 README、默认映射、服务注册表和贡献文档。它以一个 child 包含多个 services 和 bindings 的 YAML 建模，结构上符合“一台设备一张卡片”。基于 Python 的实现也有望避开现有 C 库的 gcompat 依赖，但尚未安装或现场测试。
 
-固定版本 `95b63b78ae4963e942920e839c5b802697503690` 的服务注册表没有 `offSeatAction`、`toiletLidStatus`、`toiletSetting` 等马桶服务。仅填写 `prod_id: 2QBR` 不会自动获得对应驱动；产品声明、服务适配、页面、云端注册和双向操作都需要验收。默认映射还自动注册一个无关的汽车验证模型，若实验部署必须先移除该默认测试条目。
+固定版本 `95b63b78ae4963e942920e839c5b802697503690` 的上游服务注册表没有 `offSeatAction`、`toiletLidStatus`、`toiletSetting` 等马桶服务。本项目已编写七项服务的受限适配并完成隔离检查，详见[单卡片实验](oneconnect-experiment.md)。仅填写 `prod_id: 2QBR` 不会自动获得对应驱动；页面、云端注册和双向操作仍需要验收。构建器将上游默认的无关汽车测试模型替换为空映射。
 
 其预置产品 `9MU7`、`9MXO`、`9MY5` 分别是灯泡、空调、窗帘，不是通用马桶页面。上游对这些模型来源的描述是项目作者声明，不能当作华为对本项目的授权或认证。
 

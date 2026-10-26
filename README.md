@@ -25,6 +25,7 @@
 - [现场验证进度](docs/hardware-validation.md)
 - [本地网关和 HA 集成部署](docs/local-gateway.md)
 - [新增参数设置及验收边界](docs/parameter-settings.md)
+- [单卡片桥接实验与可复现构建](docs/oneconnect-experiment.md)
 - [上游固定版本](research/repositories.json)
 
 `work/` 保存本机诊断、配置和运行文件，不纳入版本控制。不要提交设备地址、账号会话、家庭配置或虚拟机镜像。
