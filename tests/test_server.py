@@ -122,6 +122,69 @@ def test_busy_expired_unknown_and_unfinished_commands_never_execute(tmp_path):
     asyncio.run(run())
 
 
+@pytest.mark.parametrize(
+    "age,expected",
+    [
+        (-0.012, 200),
+        (-2, 200),
+        (-2.001, 400),
+        (15, 200),
+        (15.001, 400),
+        (float("nan"), 400),
+        (float("inf"), 400),
+        (-float("inf"), 400),
+    ],
+)
+def test_clock_skew_boundaries_before_dispatch(tmp_path, monkeypatch, age, expected):
+    from jomoo_gateway import server
+
+    monkeypatch.setattr(server.time, "time", lambda: 1000)
+    writes = []
+
+    async def operation(identifier, action=None):
+        writes.append(action)
+        return {"state": {"lid": "open"}}
+
+    async def run():
+        gateway = Gateway(config(), tmp_path / "ledger.db", operation)
+        result = await gateway.dispatch({**command(), "issued_at": 1000 - age})
+        assert result[0] == expected
+        assert writes == (["lid_open"] if expected == 200 else [])
+        assert gateway.db.execute("SELECT COUNT(*) FROM commands").fetchone()[0] == len(writes)
+        gateway.db.close()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("clock_shift,expected", [(-0.012, 200), (-3, 400), (16, 400)])
+def test_clock_rechecked_after_radio_wait(tmp_path, monkeypatch, clock_shift, expected):
+    from jomoo_gateway import server
+
+    now = [1000]
+    monkeypatch.setattr(server.time, "time", lambda: now[0])
+    writes = []
+
+    async def operation(identifier, action=None):
+        writes.append(action)
+        return {"state": {"lid": "open"}}
+
+    async def run():
+        gateway = Gateway(config(), tmp_path / "ledger.db", operation)
+        await gateway.radio.acquire()
+        task = asyncio.create_task(gateway.dispatch(command()))
+        await asyncio.sleep(0)
+        assert gateway.command_pending
+        now[0] += clock_shift
+        gateway.radio.release()
+        assert (await task)[0] == expected
+        assert writes == (["lid_open"] if expected == 200 else [])
+        assert not gateway.command_pending
+        assert not gateway.radio.locked()
+        gateway.db.close()
+
+    asyncio.run(run())
+
+
 def test_auth_and_no_actuation_on_boot_or_read(tmp_path):
     calls = []
 

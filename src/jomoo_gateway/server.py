@@ -22,6 +22,8 @@ from .transport import LocalTransport
 
 LOGGER = logging.getLogger(__name__)
 COMMAND_WAIT_SECONDS = 10
+COMMAND_MAX_AGE_SECONDS = 15
+COMMAND_FUTURE_SKEW_SECONDS = 2
 MECHANICAL_ACTIONS = frozenset({"lid_open", "lid_close", "ring_open", "ring_close"})
 
 
@@ -118,7 +120,9 @@ class Gateway:
         previous = self.previous_result(command_id, request)
         if previous is not None:
             return previous
-        if not 0 <= time.time() - issued <= 15:
+        age = time.time() - issued
+        if not -COMMAND_FUTURE_SKEW_SECONDS <= age <= COMMAND_MAX_AGE_SECONDS:
+            LOGGER.info("设备 %s 动作 %s 未发送：请求时间偏差 %.3f 秒", key, action, age)
             return 400, {"error": "动作请求已过期或时钟不一致"}
         # One fresh cover/ring request or stop may follow the same toilet's action.
         # Other actions, another toilet, and a third request never build a queue.
@@ -143,7 +147,8 @@ class Gateway:
             except TimeoutError:
                 LOGGER.info("设备 %s 拒绝动作 %s：等待蓝牙超时，未发送", key, action)
                 return 409, {"error": "等待蓝牙超时，未发送控制"}
-            if not 0 <= time.time() - issued <= 15:
+            age = time.time() - issued
+            if not -COMMAND_FUTURE_SKEW_SECONDS <= age <= COMMAND_MAX_AGE_SECONDS:
                 LOGGER.info("设备 %s 拒绝动作 %s：等待后已过期，未发送", key, action)
                 return 400, {"error": "等待期间动作过期，未发送控制"}
             # A concurrent duplicate may have completed while this request waited.
