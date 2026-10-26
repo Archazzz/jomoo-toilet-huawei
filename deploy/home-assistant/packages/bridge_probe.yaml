@@ -1,0 +1,9 @@
+# Merge `homeassistant: packages: !include_dir_named packages` into configuration.yaml.
+# These helpers have no connection to physical hardware.
+input_boolean:
+  jomoo_bridge_probe_a:
+    name: 九牧桥接验证 A
+    icon: mdi:test-tube
+  jomoo_bridge_probe_b:
+    name: 九牧桥接验证 B
+    icon: mdi:test-tube
