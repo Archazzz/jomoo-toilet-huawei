@@ -63,7 +63,9 @@ def test_busy_expired_unknown_and_unfinished_commands_never_execute(tmp_path):
         assert (await gateway.dispatch({**command(), "issued_at": time.time() - 30}))[0] == 400
         assert (await gateway.dispatch({**command(), "action": "flush"}))[0] == 400
         async with gateway.radio:
+            gateway.command_pending = True
             assert (await gateway.dispatch(command()))[0] == 409
+        gateway.command_pending = False
         # Simulate the crash window after journal commit, before any known result.
         import json
 
@@ -98,5 +100,33 @@ def test_auth_and_no_actuation_on_boot_or_read(tmp_path):
             assert calls == [None]
             gateway.states["a"]["observed_at"] = time.time() - 241
             assert not gateway.snapshot()["a"]["available"]
+
+    asyncio.run(run())
+
+
+def test_control_waits_for_read_but_never_queues_behind_another_action(tmp_path):
+    async def run():
+        reading = asyncio.Event()
+        release = asyncio.Event()
+        calls = []
+
+        async def operation(identifier, action=None):
+            calls.append(action)
+            if action is None:
+                reading.set()
+                await release.wait()
+            return {"state": {"lid": "open"}}
+
+        gateway = Gateway(config(), tmp_path / "ledger.db", operation)
+        read = asyncio.create_task(gateway.read("b"))
+        await reading.wait()
+        action = asyncio.create_task(gateway.dispatch(command()))
+        await asyncio.sleep(0)
+        assert (await gateway.dispatch(command()))[0] == 409
+        release.set()
+        await read
+        assert (await action)[0] == 200
+        assert calls == [None, "lid_open"]
+        gateway.db.close()
 
     asyncio.run(run())

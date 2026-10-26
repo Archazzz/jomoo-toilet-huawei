@@ -5,8 +5,11 @@ import asyncio
 import contextlib
 import hmac
 import json
+import logging
 import os
 import sqlite3
+import sys
+import threading
 import time
 from pathlib import Path
 from uuid import UUID
@@ -14,6 +17,9 @@ from uuid import UUID
 from aiohttp import web
 
 from .control import operate
+
+LOGGER = logging.getLogger(__name__)
+
 
 ACTIONS = frozenset(
     {
@@ -43,7 +49,10 @@ class Gateway:
         if len(self.token) < 32:
             raise ValueError("令牌至少 32 字符")
         self.operation = operation
+        self.poll_interval = max(30, float(config.get("poll_interval", 60)))
+        self.state_ttl = self.poll_interval + 90
         self.radio = asyncio.Lock()
+        self.command_pending = False
         self.states = {}
         self.db = sqlite3.connect(ledger)
         self.db.execute(
@@ -60,20 +69,23 @@ class Gateway:
                 "actions": device["actions"],
                 **self.states.get(key, {}),
                 "available": bool(self.states.get(key, {}).get("available"))
-                and now - self.states.get(key, {}).get("observed_at", 0) < 240,
+                and now - self.states.get(key, {}).get("observed_at", 0) < self.state_ttl,
             }
             for key, device in self.devices.items()
         }
 
     async def read(self, key: str) -> None:
         # No queue of stale commands behind a long-running BLE operation.
-        if self.radio.locked():
+        if self.radio.locked() or self.command_pending:
             return
         async with self.radio:
             try:
-                result = await self.operation(self.devices[key]["identifier"])
+                async with asyncio.timeout(85):
+                    result = await self.operation(self.devices[key]["identifier"])
                 self.states[key] = {"available": True, "observed_at": time.time(), **result}
-            except Exception:
+                LOGGER.info("设备 %s 读取成功", key)
+            except Exception as exc:
+                LOGGER.warning("设备 %s 读取失败：%s", key, type(exc).__name__)
                 self.states[key] = {"available": False, "error": "读取失败，等待下次只读刷新"}
 
     async def dispatch(self, data: dict) -> tuple[int, dict]:
@@ -96,17 +108,30 @@ class Gateway:
             return tuple(json.loads(previous[1]))
         if not 0 <= time.time() - issued <= 15:
             return 400, {"error": "动作请求已过期或时钟不一致"}
-        if self.radio.locked():
-            return 409, {"error": "蓝牙忙，请稍后主动操作；没有排队"}
-        async with self.radio:
+        if self.command_pending:
+            return 409, {"error": "已有控制动作正在处理，没有排队"}
+        self.command_pending = True
+        acquired = False
+        try:
+            # Only wait for a read already in progress, never behind another action.
+            try:
+                async with asyncio.timeout(5):
+                    await self.radio.acquire()
+                    acquired = True
+            except TimeoutError:
+                return 409, {"error": "蓝牙读取尚未结束，未发送控制"}
+            if not 0 <= time.time() - issued <= 15:
+                return 400, {"error": "等待期间动作过期，未发送控制"}
             self.db.execute("INSERT INTO commands VALUES (?,?,NULL)", (command_id, request))
-            self.db.commit()  # Commit before any BLE write; a crash must never replay it.
+            self.db.commit()
             self.states[key] = {"available": False, "error": "正在执行并校验"}
             try:
-                result = await self.operation(self.devices[key]["identifier"], action)
+                async with asyncio.timeout(85):
+                    result = await self.operation(self.devices[key]["identifier"], action)
                 self.states[key] = {"available": True, "observed_at": time.time(), **result}
                 response = (200, result)
-            except Exception:
+            except Exception as exc:
+                LOGGER.warning("设备 %s 动作未确认：%s", key, type(exc).__name__)
                 response = (502, {"error": "动作未确认；请查看设备，不会自动重试"})
                 self.states[key] = {"available": False, "error": response[1]["error"]}
             self.db.execute(
@@ -114,12 +139,25 @@ class Gateway:
             )
             self.db.commit()
             return response
+        finally:
+            if acquired:
+                self.radio.release()
+            self.command_pending = False
 
     async def poll(self) -> None:
+        if sys.platform == "darwin":
+            from CoreBluetooth import CBManager
+            from Foundation import NSBundle
+
+            LOGGER.info(
+                "蓝牙授权状态=%s，应用=%s",
+                CBManager.authorization(),
+                NSBundle.mainBundle().bundleIdentifier(),
+            )
         while True:
             for key in self.devices:
                 await self.read(key)
-            await asyncio.sleep(180)
+            await asyncio.sleep(self.poll_interval)
 
 
 def create_app(gateway: Gateway, *, polling=True) -> web.Application:
@@ -156,6 +194,13 @@ def create_app(gateway: Gateway, *, polling=True) -> web.Application:
 
     async def lifetime(app):
         task = asyncio.create_task(gateway.poll()) if polling else None
+        if task:
+
+            def completed(finished):
+                if not finished.cancelled() and finished.exception():
+                    LOGGER.error("只读轮询退出：%s", type(finished.exception()).__name__)
+
+            task.add_done_callback(completed)
         yield
         if task:
             task.cancel()
@@ -175,6 +220,7 @@ def main() -> None:
     parser.add_argument("--config", required=True, type=Path)
     args = parser.parse_args()
     os.umask(0o077)
+    logging.basicConfig(level=logging.INFO)
     config = json.loads(args.config.read_text())
     if config["bind"] in ("0.0.0.0", "::"):
         raise ValueError("请绑定具体家庭局域网接口")
@@ -186,6 +232,7 @@ def main() -> None:
         access_log=None,
         print=None,
         handler_cancellation=False,
+        handle_signals=threading.current_thread() is threading.main_thread(),
     )
 
 
