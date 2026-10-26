@@ -1,10 +1,12 @@
 {
   "domain": "jomoo_local",
   "name": "九牧本地蓝牙网关",
-  "codeowners": ["@Archazzz"],
+  "codeowners": [
+    "@Archazzz"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/Archazzz/jomoo-toilet-huawei",
   "iot_class": "local_polling",
   "requirements": [],
-  "version": "0.2.0"
+  "version": "0.3.0"
 }

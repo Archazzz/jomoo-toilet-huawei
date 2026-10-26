@@ -1,6 +1,10 @@
 """Only explicitly enabled actions become switches under the same HA device."""
 
+import voluptuous as vol
 from homeassistant.components.switch import SwitchEntity
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_platform
 
 from .entity import JomooEntity
 
@@ -15,6 +19,10 @@ BOOLEAN_FEATURES = {"foot_sensor", "automatic_lid", "automatic_night_light"}
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
+    platform = entity_platform.async_get_current_platform()
+    platform.async_register_entity_service(
+        "execute", {vol.Required("action"): cv.string}, "async_execute"
+    )
     coordinator = entry.runtime_data
     async_add_entities(
         JomooSwitch(coordinator, key, feature)
@@ -64,3 +72,8 @@ class JomooSwitch(JomooEntity, SwitchEntity):
 
     async def async_turn_off(self, **kwargs):
         await self.coordinator.command(self.key, self.off_action)
+
+    async def async_execute(self, action: str) -> None:
+        if self.feature != "lid" or action not in self.device_data.get("actions", []):
+            raise HomeAssistantError("此设备未开放该操作")
+        await self.coordinator.command(self.key, action)

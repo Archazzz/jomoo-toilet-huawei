@@ -40,7 +40,7 @@ class Coordinator(DataUpdateCoordinator):
             hass,
             logging.getLogger(__name__),
             name=DOMAIN,
-            update_interval=timedelta(seconds=15),
+            update_interval=timedelta(seconds=5),
             config_entry=entry,
         )
         self.url = entry.data["url"].rstrip("/")

@@ -69,8 +69,8 @@ def test_same_entity_supplies_multiple_services_without_fabricated_state():
             "seatStatus": {"status": 0},
             "toiletSetting": {"autoFoot": True, "autoOpenCover": True},
             "drySetting": {"gear": 3},
-            "washSetting": {"tempGear": 5},
-            "seatHeating": {},
+            "washSetting": {"tempGear": 5, "massage": 0, "selfClean": 0},
+            "seatHeating": {"gear": 100},
             "offSeatAction": {},
         }
         for sid, state in expected.items():
@@ -170,3 +170,66 @@ def test_work_status_never_invents_idle_for_unknown_activity():
     assert asyncio.run(a.read_state(hass, service, ("switch.toilet_a",))) == {"status": 107}
     state["foam_running"] = True
     assert asyncio.run(a.read_state(hass, service, ("switch.toilet_a",))) == {}
+
+
+@pytest.mark.parametrize(
+    "sid,payload,action",
+    [
+        ("offSeatAction", {"action": 5}, "ring_open"),
+        ("offSeatAction", {"action": 6}, "ring_close"),
+        ("offSeatAction", {"action": 1}, "flush_large"),
+        ("onSeatAction", {"action": 101}, "wash_auto_bidet"),
+        ("stop", {"action": 0}, "stop"),
+        ("seatHeating", {"gear": 100}, "seat_temperature_5"),
+        ("drySetting", {"gear": 0}, "dryer_temperature_0"),
+        ("washSetting", {"waterGear": 0}, "wash_pressure_1"),
+        ("washSetting", {"amplitude": 4}, "nozzle_position_5"),
+        ("washSetting", {"anterior": 0}, "wash_width_1"),
+        ("foamShield", {"on": True}, "automatic_foam_on"),
+        ("foamShield", {"action": 1}, "foam_start"),
+        ("toiletSetting", {"autoDeo": 0}, "automatic_deodorization_off"),
+    ],
+)
+def test_extended_commands_require_per_device_allowlist_and_keep_single_card(sid, payload, action):
+    hass, calls, attrs = fixture()
+    a, service = adapter(sid)
+    with pytest.raises(ValueError):
+        asyncio.run(a.apply_command(hass, service, ("switch.toilet_a",), payload))
+    attrs["jomoo_actions"].append(action)
+    asyncio.run(a.apply_command(hass, service, ("switch.toilet_a",), payload))
+    assert calls == [
+        ("jomoo_local", "execute", {"entity_id": "switch.toilet_a", "action": action}, True)
+    ]
+
+
+@pytest.mark.parametrize(
+    "sid,payload",
+    [
+        ("seatHeating", {"gear": 5}),
+        ("seatHeating", {"gear": True}),
+        ("drySetting", {"gear": 4}),
+        ("washSetting", {"waterGear": -1}),
+        ("washSetting", {"tempGear": 3, "waterGear": 1}),
+        ("onSeatAction", {"action": 200}),
+        ("foamShield", {"action": 0}),
+        ("toiletSetting", {"mute": 1}),
+        ("toiletSetting", {"autoFlush": 1}),
+    ],
+)
+def test_unknown_semantics_and_batch_updates_are_rejected(sid, payload):
+    hass, calls, _ = fixture()
+    a, service = adapter(sid)
+    with pytest.raises(ValueError):
+        asyncio.run(a.apply_command(hass, service, ("switch.toilet_a",), payload))
+    assert not calls
+
+
+def test_status_projection_does_not_invent_normality_for_unknown_faults():
+    hass, _, attrs = fixture()
+    state = attrs["jomoo_state"]
+    state.update(faults_present=True, fault_codes=[])
+    a, service = adapter("faultDetection")
+    assert asyncio.run(a.read_state(hass, service, ("switch.toilet_a",))) == {"status": 1}
+    state.update(idle_confirmed=False, wash_mode="bidet", automatic_cycle=True)
+    a, service = adapter("toiletStatus")
+    assert asyncio.run(a.read_state(hass, service, ("switch.toilet_a",))) == {"status": 201}

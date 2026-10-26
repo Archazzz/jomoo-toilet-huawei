@@ -25,6 +25,10 @@
           },
           {
             "st": "status",
+            "sid": "toiletStatus"
+          },
+          {
+            "st": "status",
             "sid": "seatStatus"
           },
           {
@@ -44,8 +48,24 @@
             "sid": "seatHeating"
           },
           {
-            "st": "status",
-            "sid": "toiletStatus"
+            "st": "action",
+            "sid": "onSeatAction"
+          },
+          {
+            "st": "action",
+            "sid": "stop"
+          },
+          {
+            "st": "toiletSeat",
+            "sid": "foamShield"
+          },
+          {
+            "st": "fault",
+            "sid": "faultDetection"
+          },
+          {
+            "st": "filterElement",
+            "sid": "filterElement"
           }
         ]
       },
@@ -58,6 +78,12 @@
         },
         {
           "sid": "toiletLidStatus",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "toiletStatus",
           "entities": [
             "switch.REPLACE_WITH_TOILET_A_LID"
           ]
@@ -93,7 +119,31 @@
           ]
         },
         {
-          "sid": "toiletStatus",
+          "sid": "onSeatAction",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "stop",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "foamShield",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "faultDetection",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "filterElement",
           "entities": [
             "switch.REPLACE_WITH_TOILET_A_LID"
           ]
@@ -122,6 +172,10 @@
           },
           {
             "st": "status",
+            "sid": "toiletStatus"
+          },
+          {
+            "st": "status",
             "sid": "seatStatus"
           },
           {
@@ -141,8 +195,24 @@
             "sid": "seatHeating"
           },
           {
-            "st": "status",
-            "sid": "toiletStatus"
+            "st": "action",
+            "sid": "onSeatAction"
+          },
+          {
+            "st": "action",
+            "sid": "stop"
+          },
+          {
+            "st": "toiletSeat",
+            "sid": "foamShield"
+          },
+          {
+            "st": "fault",
+            "sid": "faultDetection"
+          },
+          {
+            "st": "filterElement",
+            "sid": "filterElement"
           }
         ]
       },
@@ -155,6 +225,12 @@
         },
         {
           "sid": "toiletLidStatus",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "toiletStatus",
           "entities": [
             "switch.REPLACE_WITH_TOILET_B_LID"
           ]
@@ -190,7 +266,31 @@
           ]
         },
         {
-          "sid": "toiletStatus",
+          "sid": "onSeatAction",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "stop",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "foamShield",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "faultDetection",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "filterElement",
           "entities": [
             "switch.REPLACE_WITH_TOILET_B_LID"
           ]

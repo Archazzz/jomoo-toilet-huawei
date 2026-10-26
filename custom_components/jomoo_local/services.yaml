@@ -1,0 +1,14 @@
+execute:
+  name: 执行马桶操作
+  description: 通过当前马桶的固定绑定执行已开放操作；失败不会自动重试。
+  target:
+    entity:
+      integration: jomoo_local
+      domain: switch
+  fields:
+    action:
+      name: 操作
+      description: 必须是此马桶当前已开放的操作名称。
+      required: true
+      selector:
+        text:
