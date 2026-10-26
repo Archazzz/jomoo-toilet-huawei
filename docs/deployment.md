@@ -6,6 +6,19 @@
 
 创建 ARM64 虚拟化虚拟机，建议 2 个 vCPU、4 GB 内存、持久化磁盘。磁盘和完整 `.utm` 包保存在本机 `work/` 或其他备份目录，不进 Git。使用有线桥接网卡，让 HA、手机和华为主机处于可通信的局域网；NAT 网络能打开网页，并不足以证明多播发现正常。
 
+仓库提供文件生成工具。先解压已验证的 HAOS ARM64 镜像，再根据 `networksetup -listallhardwareports` 选择有线接口。示例中的 `en0` 需要按本机情况核对：
+
+```sh
+python3 tools/create_haos_vm.py \
+  --image work/vm/haos-18.3.qcow2 \
+  --output work/vm/HomeAssistant.utm \
+  --bridge en0
+```
+
+工具会新建随机虚拟网卡 MAC 与虚拟机 UUID、复制磁盘，不覆盖已有虚拟机。在 UTM 中打开生成的 `.utm` 包，再启动。每次重新生成都是新的设备身份，日常重启应复用原包。配置格式已在 UTM 5.0.8 中导入并启动验证。串口使用本机 PTTY，可通过 `utmctl attach` 查看路径；控制台仅用于本机维护，不开放远程 root 端口。
+
+HAOS 首次启动还会下载 Supervisor、Core 和扩展仓库。若页面长时间停留在准备阶段，应检查虚拟机中的网络与下载日志，不能仅凭宿主机能访问 GitHub 就认为虚拟机也能访问。首次安装的临时代理应在安装完成后撤除；后续更新仍需要可用的外网通路。
+
 参考 [HA 官方 macOS 安装文档](https://www.home-assistant.io/installation/macos/) 和 [UTM 文档](https://docs.getutm.app/)。虚拟机的内置蓝牙不可假定透传；当前诊断运行于 Mac 原生 CoreBluetooth。后续可选择 Mac 传输服务，或在覆盖不足时增加 ESPHome 主动蓝牙代理。
 
 ## 华为桥接验证

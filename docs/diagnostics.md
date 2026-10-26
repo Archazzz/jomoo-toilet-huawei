@@ -34,8 +34,8 @@ mkdir -p work
 ## 开发检查
 
 ```sh
-.venv/bin/ruff check src tests
-.venv/bin/ruff format --check src tests
+.venv/bin/ruff check src tests tools
+.venv/bin/ruff format --check src tests tools
 .venv/bin/pytest -q
 git diff --check
 ```
