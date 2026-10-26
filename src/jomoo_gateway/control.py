@@ -17,6 +17,10 @@ LOGGER = logging.getLogger(__name__)
 class UnconfirmedAction(DiagnosticError):
     """A write may have reached hardware; never retry it automatically."""
 
+    def __init__(self, message: str, *, details: dict | None = None) -> None:
+        super().__init__(message)
+        self.details = details or {}
+
 
 async def operate(identifier: str, action: str | None = None, *, target_resolver=None) -> dict:
     started = time.monotonic()
@@ -74,12 +78,16 @@ async def operate(identifier: str, action: str | None = None, *, target_resolver
                 submitted_at = time.monotonic()
                 await client.write_gatt_char(char, packet, response=False)
             except Exception as exc:
-                raise UnconfirmedAction("写入结果未知；未重试") from exc
+                raise UnconfirmedAction(
+                    "写入结果未知；未重试", details={"phase": "write", "cause": type(exc).__name__}
+                ) from exc
+            last_state = None
             try:
                 last_mismatch = None
                 for _ in range(5):
                     await asyncio.sleep(1)
                     after = await read()
+                    last_state = after.fields()
                     try:
                         verified = before.verify(after, action)
                     except UnsafeState as exc:
@@ -95,5 +103,20 @@ async def operate(identifier: str, action: str | None = None, *, target_resolver
                             uninterpreted_changes=before.uninterpreted_changes(after),
                         )
             except Exception as exc:
-                raise UnconfirmedAction("动作已发送，但回读未通过；未重试") from exc
-            raise UnconfirmedAction("动作已发送，但未观察到稳定目标状态；未重试") from last_mismatch
+                raise UnconfirmedAction(
+                    "动作已发送，但回读未通过；未重试",
+                    details={
+                        "phase": "readback",
+                        "cause": type(exc).__name__,
+                        "last_observed": last_state,
+                    },
+                ) from exc
+            raise UnconfirmedAction(
+                "动作已发送，但未观察到稳定目标状态；未重试",
+                details={
+                    "phase": "verification",
+                    "target": before.target(action),
+                    "last_observed": last_state,
+                    "known_settings_mismatch_seen": last_mismatch is not None,
+                },
+            ) from last_mismatch

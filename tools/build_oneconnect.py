@@ -124,7 +124,13 @@ for _adapter in TOILET_ADAPTERS:
                 child, command.service_id, command.payload
             )
         except Exception as error:
-            _LOGGER.warning("Child command rejected before dispatch: %s", type(error).__name__)
+            reason = str(error) if isinstance(error, ValueError) else type(error).__name__
+            action = command.payload.get("action")
+            action = action if type(action) in (int, bool) else type(action).__name__
+            _LOGGER.warning(
+                "Child command rejected sid=%s fields=%s action=%s: %s",
+                command.service_id, sorted(command.payload), action, reason,
+            )
             return OnlineChildCommand(
                 response=build_child_command_response(
                     command=command,

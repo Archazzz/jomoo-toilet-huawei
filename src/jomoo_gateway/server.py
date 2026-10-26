@@ -16,7 +16,7 @@ from uuid import UUID
 
 from aiohttp import web
 
-from .control import operate
+from .control import UnconfirmedAction, operate
 from .transport import LocalTransport
 
 LOGGER = logging.getLogger(__name__)
@@ -60,6 +60,8 @@ class Gateway:
         self.commands_in_flight = 0
         self.active_device: str | None = None
         self.active_action: str | None = None
+        self.poll_wakeup = asyncio.Event()
+        self.refresh_first: str | None = None
         self.states = {}
         self.db = sqlite3.connect(ledger)
         self.db.execute(
@@ -183,7 +185,13 @@ class Gateway:
             except Exception as exc:
                 LOGGER.warning("设备 %s 动作未确认：%s", key, type(exc).__name__)
                 response = (502, {"error": "动作未确认；请查看设备，不会自动重试"})
+                if isinstance(exc, UnconfirmedAction):
+                    response[1]["diagnostics"] = exc.details
+                    LOGGER.warning("设备 %s 动作诊断：%s", key, exc.details)
                 self.states[key] = {"available": False, "error": response[1]["error"]}
+                # Wake only the read-only poller, never replay the failed command.
+                self.refresh_first = key
+                self.poll_wakeup.set()
             self.db.execute(
                 "UPDATE commands SET result=? WHERE id=?", (json.dumps(response), command_id)
             )
@@ -207,9 +215,19 @@ class Gateway:
                 NSBundle.mainBundle().bundleIdentifier(),
             )
         while True:
-            for key in self.devices:
+            self.poll_wakeup.clear()
+            first, self.refresh_first = self.refresh_first, None
+            order = list(self.devices)
+            if first in order:
+                order.remove(first)
+                order.insert(0, first)
+            for key in order:
                 await self.read(key)
-            await asyncio.sleep(self.poll_interval)
+            try:
+                async with asyncio.timeout(self.poll_interval):
+                    await self.poll_wakeup.wait()
+            except TimeoutError:
+                pass
 
 
 def create_app(gateway: Gateway, *, polling=True) -> web.Application:

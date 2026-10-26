@@ -247,3 +247,42 @@ def test_waiting_lid_timeout_or_expiry_never_executes(tmp_path, monkeypatch, exp
         gateway.db.close()
 
     asyncio.run(run())
+
+
+def test_failed_command_wakes_read_only_recovery_without_replay(tmp_path, monkeypatch):
+    from jomoo_gateway import server
+
+    monkeypatch.setattr(server.sys, "platform", "linux")
+
+    async def run():
+        boot_read, recovered = asyncio.Event(), asyncio.Event()
+        calls = []
+        failed = False
+
+        async def operation(identifier, action=None):
+            nonlocal failed
+            calls.append((identifier, action))
+            if action:
+                failed = True
+                raise server.UnconfirmedAction("unconfirmed", details={"phase": "verification"})
+            if failed and identifier == config()["devices"]["a"]["identifier"]:
+                recovered.set()
+            if identifier == config()["devices"]["b"]["identifier"]:
+                boot_read.set()
+            return {"state": {"lid": "closed"}, "outcome": "read"}
+
+        gateway = Gateway(config(), tmp_path / "ledger.db", operation)
+        poll = asyncio.create_task(gateway.poll())
+        await boot_read.wait()
+        status, body = await gateway.dispatch(command())
+        assert status == 502 and body["diagnostics"]["phase"] == "verification"
+        await asyncio.wait_for(recovered.wait(), timeout=1)
+        assert gateway.snapshot()["a"]["available"]
+        assert [action for _, action in calls if action] == ["lid_open"]
+        assert (await gateway.dispatch(command()))[0] == 502  # Only a new explicit request writes.
+        poll.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await poll
+        gateway.db.close()
+
+    asyncio.run(run())
