@@ -1,0 +1,18 @@
+{
+  "bind": "192.0.2.10",
+  "port": 18123,
+  "token": "REPLACE_WITH_A_RANDOM_SECRET_DO_NOT_USE_THIS_EXAMPLE",
+  "poll_interval": 60,
+  "devices": {
+    "main": {
+      "identifier": "00000000-0000-0000-0000-000000000001",
+      "name": "主卫九牧马桶",
+      "actions": ["lid_open", "lid_close"]
+    },
+    "guest": {
+      "identifier": "00000000-0000-0000-0000-000000000002",
+      "name": "客卫九牧马桶",
+      "actions": ["lid_open", "lid_close"]
+    }
+  }
+}

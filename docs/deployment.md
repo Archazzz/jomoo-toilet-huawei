@@ -19,7 +19,7 @@ python3 tools/create_haos_vm.py \
 
 HAOS 首次启动还会下载 Supervisor、Core 和扩展仓库。若页面长时间停留在准备阶段，应检查虚拟机中的网络与下载日志，不能仅凭宿主机能访问 GitHub 就认为虚拟机也能访问。首次安装的临时代理应在安装完成后撤除；后续更新仍需要可用的外网通路。
 
-参考 [HA 官方 macOS 安装文档](https://www.home-assistant.io/installation/macos/) 和 [UTM 文档](https://docs.getutm.app/)。虚拟机的内置蓝牙不可假定透传；当前诊断运行于 Mac 原生 CoreBluetooth。后续可选择 Mac 传输服务，或在覆盖不足时增加 ESPHome 主动蓝牙代理。
+参考 [HA 官方 macOS 安装文档](https://www.home-assistant.io/installation/macos/) 和 [UTM 文档](https://docs.getutm.app/)。虚拟机的内置蓝牙不可假定透传；当前诊断运行于 Mac 原生 CoreBluetooth。当前使用 Mac 本机传输服务，见[本地网关部署](local-gateway.md)；覆盖不足时可另行评估 ESPHome 主动蓝牙代理，尚未部署。
 
 ## 华为桥接验证
 
@@ -85,3 +85,8 @@ Mac 重启属于会打断其他工作的操作，应由用户安排时间。File
 ## 当前已通过的桥接验收
 
 鸿蒙智慧生活已成功添加智控网关和验证 A/B。手机先设置 A 关、B 开，HA 状态对应更新。一次 HA Core 重启后，`device_ac` 与 `device_sn` 不变，手机仍在线、无需重新绑定；手机再设置 A 开、B 关，HA 状态再次对应更新。详细边界见 [现场验证记录](hardware-validation.md)。此前各段的“待验收”描述是当时诊断状态，以本节与现场验证记录中的最新结果为准。
+
+
+## 真实马桶当前状态
+
+两台真实翻盖入口已导出到同一华为网关，主卫手机开盖、关盖均有现场与回读确认。独立后台 BLE app 尚未取得系统授权，目前使用已授权的交互运行环境；不能把 HA 的登录启动成功视为完整蓝牙链路自启动成功。网关配置和动作账本需要持久保存，重启只查询状态、不重放动作。详见[网关部署](local-gateway.md)和[现场验证](hardware-validation.md)。
