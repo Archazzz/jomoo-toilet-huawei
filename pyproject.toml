@@ -13,6 +13,9 @@ dependencies = ["bleak>=3.0,<4"]
 [project.optional-dependencies]
 dev = ["pytest>=9,<10", "ruff>=0.17,<0.18"]
 
+[project.scripts]
+jomoo = "jomoo_gateway.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

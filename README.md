@@ -18,6 +18,7 @@
 - [架构与实施关卡](docs/architecture.md)
 - [调研来源与兼容边界](docs/research.md)
 - [开发规范](CONTRIBUTING.md)
+- [本机蓝牙诊断与开发检查](docs/diagnostics.md)
 - [上游固定版本](research/repositories.json)
 
 `work/` 保存本机诊断、配置和运行文件，不纳入版本控制。不要提交设备地址、账号会话、家庭配置或虚拟机镜像。
