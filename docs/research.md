@@ -29,7 +29,7 @@
 
 2026-10-27 从华为[产品目录](https://smarthome-drcn.dbankcdn.com/device/guide/ver_202609_hmos/mainHelp.json) 查到 `2QBR`，名称“九牧 i60 智能马桶 ZD6450”，型号 `ZD6450-SA-CJM305`，品类 `123`。同目录还有其他九牧型号，不能把它们的支持范围混同。
 
-- [官方 Profile](https://smarthome-drcn.dbankcdn.com/device/guide/2QBR/2QBR.json)：`protocolType=WiFi`、`uiType=H5`，页面为 [2QBR 控制页面](https://smarthome-drcn.dbankcdn.com/device/guide/2QBR/h5_001/index.html)。这里只核对产品声明，未验证手机端页面实际展示或注册。
+- [官方 Profile](https://smarthome-drcn.dbankcdn.com/device/guide/2QBR/2QBR.json)：`protocolType=WiFi`、`uiType=H5`，页面为 [2QBR 控制页面](https://smarthome-drcn.dbankcdn.com/device/guide/2QBR/h5_001/index.html)。官方产品声明与现场联网版本分别核对；目前已通过本项目桥接注册并打开该页面，不能据此推断现场硬件支持官方直连。
 - 目录配网类型 `hiLinkBleConfig|ignoreBond`，广播规则 `Hi-JOMOOTOLIE-12QBR.*`。它表示 BLE 辅助配网，不能据此认定马桶是 Lite 网关 BLE 子设备。
 - [官方配网说明](https://smarthome-drcn.dbankcdn.com/device/guide/2QBR/help.html)：接通电源并盖上盖板；长按侧面按键 2–5 秒，一声后松手，随后连续三声进入联网模式。
 
@@ -37,18 +37,18 @@
 
 ### 单张原生马桶卡片的已知契约
 
-下表来自 Profile，代表官方产品接口，不代表本项目已支持。
+下表来自 Profile，接口能力与当前适配分开记录；完整验证范围见[功能表](expanded-controls.md)。
 
 | 服务 | 官方字段/含义 | 当前适配状态 |
 |---|---|---|
-| `offSeatAction` | `action` 3 开盖、4 关盖、5 开圈、6 关圈；仅写 | BLE 翻盖已验证，华为该服务尚未注册测试 |
-| `toiletLidStatus` | `status` 4 开盖关圈、5 全开、6 全关；只读 | BLE 盖圈可读，尚无该华为服务适配 |
-| `seatStatus` | `status` 0 未着座、1 已着座；只读 | HA 落座可读，未导出为另一张卡片 |
+| `offSeatAction` | `action` 3 开盖、4 关盖、5 开圈、6 关圈；仅写 | 已接入，主卫盖圈和冲水已有现场确认 |
+| `toiletLidStatus` | `status` 4 开盖关圈、5 全开、6 全关；只读 | 已接入新鲜盖圈状态 |
+| `seatStatus` | `status` 0 未着座、1 已着座；只读 | 已在同一原生卡片上报 |
 | `toiletSetting` | `autoFoot`、`autoLight`、`autoOpenCover` 等只读；`mute`、`autoDeo` 可读写 | 不能把只读字段伪装为该页面的可控功能 |
-| `drySetting` | `gear` 0–3 | BLE 读档位，未开放写入 |
-| `seatHeating` | `gear` 0–4、100；`mode` 只读 | 100 的映射不能直接当作 BLE 档位，待核对 |
-| `washSetting` | 水温 0–5、水压 0–4 等 | 不假设水压、位置与 BLE 编号相同 |
-| `foamShield` | 单次发泡 `action`、落座发泡 `on` | 尚未实现或发送 |
+| `drySetting` | `gear` 0–3 | 风温修改与恢复回读通过 |
+| `seatHeating` | `gear` 0–4、100；`mode` 只读 | 按本型号资料将 100 映射为 BLE 5；其他档位往返通过 |
+| `washSetting` | 水温 0–5、水压 0–4 等 | 水温直接档位；水压、位置加 1 转换并限真实清洗 |
+| `foamShield` | 单次发泡 `action`、落座发泡 `on` | 发泡经用户确认；落座发泡开关往返通过 |
 
 官方 Profile 中还包含清洗、停止、滤芯、故障、升级等服务。未验证功能不能返回虚构成功；原生页面可能显示这些控件，桥接需要明确处理不支持项，并验证页面的实际依赖。
 
@@ -67,7 +67,7 @@
 
 已审阅 [xiasi0/ha-oneconnect-bridge](https://github.com/xiasi0/ha-oneconnect-bridge) 的固定版本 README、默认映射、服务注册表和贡献文档。它以一个 child 包含多个 services 和 bindings 的 YAML 建模，结构上符合“一台设备一张卡片”。本项目的受限扩展已部署，父网关与主设备注册成功，用户确认原生页面正常打开；功能及稳定性验收见实验记录。新实现采用 Python，尚未通过 Core 镜像更新验证依赖恢复。
 
-固定版本 `95b63b78ae4963e942920e839c5b802697503690` 的上游服务注册表没有 `offSeatAction`、`toiletLidStatus`、`toiletSetting` 等马桶服务。本项目已编写七项服务的受限适配并完成隔离检查，详见[单卡片实验](oneconnect-experiment.md)。仅填写 `prod_id: 2QBR` 不会自动获得对应驱动；页面、云端注册和双向操作仍需要验收。构建器将上游默认的无关汽车测试模型替换为空映射。
+固定版本 `95b63b78ae4963e942920e839c5b802697503690` 的上游服务注册表没有 `offSeatAction`、`toiletLidStatus`、`toiletSetting` 等马桶服务。本项目已编写 13 项服务的受限适配并完成隔离检查，详见[单卡片实验](oneconnect-experiment.md)。仅填写 `prod_id: 2QBR` 不会自动获得对应驱动；页面、云端注册和双向操作仍需要验收。构建器将上游默认的无关汽车测试模型替换为空映射。
 
 其预置产品 `9MU7`、`9MXO`、`9MY5` 分别是灯泡、空调、窗帘，不是通用马桶页面。上游对这些模型来源的描述是项目作者声明，不能当作华为对本项目的授权或认证。
 
