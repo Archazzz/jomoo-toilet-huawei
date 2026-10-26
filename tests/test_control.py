@@ -47,7 +47,7 @@ def test_option_verification_detects_unrelated_changes():
         before.verify(snapshot(settings=p.hex()), "foot_sensor_off")
 
 
-def install_client(monkeypatch, *, fail_action=False):
+def install_client(monkeypatch, *, fail_action=False, drop_after_action=False):
     writes = []
 
     async def target(_identifier):
@@ -85,6 +85,8 @@ def install_client(monkeypatch, *, fail_action=False):
                 p = bytearray(self.state.extended)
                 p[7] &= ~32
                 self.state = snapshot(settings=p.hex())
+                if drop_after_action:
+                    self.is_connected = False
                 return
             for c, p in (
                 (0xFA, self.state.extended),
@@ -207,3 +209,12 @@ def test_fresh_preflight_rejection_is_not_an_uncertain_write(monkeypatch):
         asyncio.run(control.operate("device", "wash_hip"))
     assert rejected.value.state["seated"] is False
     assert writes == [STATUS_QUERY]
+
+
+def test_failed_readback_reports_connection_reason_without_repeating_write(monkeypatch):
+    writes = install_client(monkeypatch, drop_after_action=True)
+    with pytest.raises(control.UnconfirmedAction) as failure:
+        asyncio.run(control.operate("device", "foot_sensor_off"))
+    assert failure.value.details["phase"] == "readback"
+    assert "蓝牙断开" in failure.value.details["reason"]
+    assert len([p for p in writes if p != STATUS_QUERY]) == 1

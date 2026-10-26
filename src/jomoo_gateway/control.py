@@ -44,9 +44,11 @@ async def operate(identifier: str, action: str | None = None, *, target_resolver
     stream = FrameStream()
     frames = {}
     received = {}
+    observed_frames = set()
 
     def notify(_sender, data):
         for frame in stream.feed(bytes(data)):
+            observed_frames.add((frame.command, len(frame.payload)))
             if frame.is_known_status:
                 frames[frame.command] = frame
                 received[frame.command] = time.monotonic()
@@ -63,6 +65,7 @@ async def operate(identifier: str, action: str | None = None, *, target_resolver
             async def read() -> Snapshot:
                 frames.clear()
                 received.clear()
+                observed_frames.clear()
                 await client.write_gatt_char(char, STATUS_QUERY, response=False)
                 deadline = time.monotonic() + 10
                 while time.monotonic() < deadline:
@@ -71,7 +74,10 @@ async def operate(identifier: str, action: str | None = None, *, target_resolver
                     if all(command in frames for command in (0xFA, 0xE9, 0xEA)):
                         return Snapshot.from_frames(frames)
                     await asyncio.sleep(0.1)
-                raise DiagnosticError("状态查询超时；未使用缓存补齐")
+                seen = ", ".join(
+                    f"{command:02X}/{length}" for command, length in sorted(observed_frames)
+                )
+                raise DiagnosticError(f"状态查询超时；已收命令/长度 [{seen}]，未使用缓存补齐")
 
             before = await read()
             timings["initial_read"] = round((time.monotonic() - connected_at) * 1000)
@@ -119,6 +125,9 @@ async def operate(identifier: str, action: str | None = None, *, target_resolver
                     details={
                         "phase": "readback",
                         "cause": type(exc).__name__,
+                        "reason": str(exc)
+                        if isinstance(exc, DiagnosticError)
+                        else "transport error",
                         "last_observed": last_state,
                     },
                 ) from exc
