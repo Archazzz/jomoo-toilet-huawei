@@ -1,0 +1,86 @@
+[
+  {
+    "repository": "xiaoyaner0201/ha-jomoo-ble",
+    "url": "https://github.com/xiaoyaner0201/ha-jomoo-ble",
+    "commit": "fe5cb67aca8bca5ed9efdb0b69fc8274e90f50d7",
+    "branch": "main",
+    "pushed_at": "2026-10-18T11:45:58Z",
+    "license_reported": "Apache-2.0",
+    "accessed_date": "2026-10-26",
+    "verification": "README and selected source reviewed; not installed or hardware-tested here",
+    "commit_verified_via": "GitHub commits/main",
+    "tree_sha": "34a34e4483021f8fce805826bb083cf90d1edb02"
+  },
+  {
+    "repository": "wilton999/JomooToilet",
+    "url": "https://github.com/wilton999/JomooToilet",
+    "commit": "3ef37681584b3b88e9b951f7a22b4aa4928fa439",
+    "branch": "main",
+    "pushed_at": "2026-09-27T15:29:24Z",
+    "license_reported": "MIT",
+    "accessed_date": "2026-10-26",
+    "verification": "README and selected source reviewed; not installed or hardware-tested here",
+    "commit_verified_via": "GitHub commits/main",
+    "tree_sha": "6140556f37753bcd7ebc229bbdd6703ddf5fbc0c"
+  },
+  {
+    "repository": "caokang1997/JMGatt_client",
+    "url": "https://github.com/caokang1997/JMGatt_client",
+    "commit": "6c645fc3e9978960b5ea9caa4f7c1169a53c2844",
+    "branch": "main",
+    "pushed_at": "2026-10-10T05:52:32Z",
+    "license_reported": null,
+    "accessed_date": "2026-10-26",
+    "verification": "README and selected source reviewed; not installed or hardware-tested here",
+    "commit_verified_via": "GitHub commits/main",
+    "tree_sha": "18aaee56ff5220409ad453e639e2ae00704b89c5"
+  },
+  {
+    "repository": "sorrymakeeeer/JOMOO_HA",
+    "url": "https://github.com/sorrymakeeeer/JOMOO_HA",
+    "commit": "79d1337b585e9a69c516797076407878bc271d68",
+    "branch": "main",
+    "pushed_at": "2026-10-15T15:57:31Z",
+    "license_reported": null,
+    "accessed_date": "2026-10-26",
+    "verification": "README and selected source reviewed; not installed or hardware-tested here",
+    "commit_verified_via": "GitHub commits/main",
+    "tree_sha": "88f398fa73048d5553cc57e997718a92a1d17a65"
+  },
+  {
+    "repository": "Wangxiaokang666-666/ha_hwhomebridge",
+    "url": "https://github.com/Wangxiaokang666-666/ha_hwhomebridge",
+    "commit": "9033ac073157f05dc9f3387b56efcb07aad4aaaf",
+    "branch": "main",
+    "pushed_at": "2026-10-08T04:10:47Z",
+    "license_reported": "Apache-2.0",
+    "accessed_date": "2026-10-26",
+    "verification": "README and selected source reviewed; not installed or hardware-tested here",
+    "commit_verified_via": "GitHub commits/main",
+    "tree_sha": "a660fab89fe27a57ae1594a2dfbb583d4671faae"
+  },
+  {
+    "repository": "chaosl1996/ha-hwhomebridge-entity-bridge",
+    "url": "https://github.com/chaosl1996/ha-hwhomebridge-entity-bridge",
+    "commit": "1a4231410994d063e0ee6587933d06266e7ad054",
+    "branch": "main",
+    "pushed_at": "2026-10-11T04:22:43Z",
+    "license_reported": "Apache-2.0",
+    "accessed_date": "2026-10-26",
+    "verification": "README and selected source reviewed; not installed or hardware-tested here",
+    "commit_verified_via": "GitHub commits/main",
+    "tree_sha": "b19cd1f625d7ca96049ad14cd5571a0b6c6da41f"
+  },
+  {
+    "repository": "xiasi0/ha-huawei-smarthome",
+    "url": "https://github.com/xiasi0/ha-huawei-smarthome",
+    "commit": "87ccc37b61080a88b32c4fc1ada72c0712b49093",
+    "branch": "master",
+    "pushed_at": "2026-10-21T10:10:06Z",
+    "license_reported": "GPL-3.0",
+    "accessed_date": "2026-10-26",
+    "verification": "README and selected source reviewed; not installed or hardware-tested here",
+    "commit_verified_via": "GitHub commits/master",
+    "tree_sha": "bdd1159b868a17c2945a7fb398dd07cfb0b0af95"
+  }
+]
