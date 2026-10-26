@@ -2,6 +2,7 @@ import asyncio
 import time
 from uuid import uuid4
 
+import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
 from jomoo_gateway.server import Gateway, create_app
@@ -50,6 +51,46 @@ def test_identity_dispatch_deduplication_and_restart(tmp_path):
         assert len(writes) == 2
         assert (await restarted.dispatch({**a, "device": "b"}))[0] == 409
         restarted.db.close()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_busy_preserves_confirmed_state_but_never_masks_expiry_or_failure(tmp_path, fails):
+    async def run():
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def operation(identifier, action=None):
+            if action:
+                started.set()
+                await release.wait()
+                if fails:
+                    raise TimeoutError("result unknown")
+            return {"state": {"lid": "open" if action else "closed"}}
+
+        gateway = Gateway(config(), tmp_path / "ledger.db", operation)
+        await gateway.read("a")
+        before = gateway.snapshot()["a"]
+        task = asyncio.create_task(gateway.dispatch(command()))
+        await started.wait()
+        during = gateway.snapshot()["a"]
+        assert during["available"] and during["busy"]
+        assert during["state"]["lid"] == "closed"
+        assert during["observed_at"] == before["observed_at"]
+        assert not gateway.snapshot()["b"]["available"]
+        assert not gateway.snapshot()["b"]["busy"]
+
+        gateway.states["a"]["observed_at"] -= gateway.state_ttl + 1
+        assert not gateway.snapshot()["a"]["available"]
+        release.set()
+        assert (await task)[0] == (502 if fails else 200)
+        after = gateway.snapshot()["a"]
+        assert not after["busy"]
+        assert after["available"] is not fails
+        if not fails:
+            assert after["state"]["lid"] == "open"
+        gateway.db.close()
 
     asyncio.run(run())
 

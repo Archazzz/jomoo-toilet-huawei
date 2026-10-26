@@ -53,6 +53,7 @@ class Gateway:
         self.state_ttl = self.poll_interval + 90
         self.radio = asyncio.Lock()
         self.command_pending = False
+        self.active_device: str | None = None
         self.states = {}
         self.db = sqlite3.connect(ledger)
         self.db.execute(
@@ -68,6 +69,7 @@ class Gateway:
                 "name": device["name"],
                 "actions": device["actions"],
                 **self.states.get(key, {}),
+                "busy": self.active_device == key,
                 "available": bool(self.states.get(key, {}).get("available"))
                 and now - self.states.get(key, {}).get("observed_at", 0) < self.state_ttl,
             }
@@ -124,12 +126,16 @@ class Gateway:
                 return 400, {"error": "等待期间动作过期，未发送控制"}
             self.db.execute("INSERT INTO commands VALUES (?,?,NULL)", (command_id, request))
             self.db.commit()
-            self.states[key] = {"available": False, "error": "正在执行并校验"}
+            # Keep the last confirmed state while waiting; executing is not offline.
+            # Its original timestamp still expires normally, and no target is guessed.
+            self.active_device = key
+            LOGGER.info("设备 %s 开始动作 %s", key, action)
             try:
                 async with asyncio.timeout(85):
                     result = await self.operation(self.devices[key]["identifier"], action)
                 self.states[key] = {"available": True, "observed_at": time.time(), **result}
                 response = (200, result)
+                LOGGER.info("设备 %s 动作 %s 完成：%s", key, action, result.get("outcome"))
             except Exception as exc:
                 LOGGER.warning("设备 %s 动作未确认：%s", key, type(exc).__name__)
                 response = (502, {"error": "动作未确认；请查看设备，不会自动重试"})
@@ -140,6 +146,7 @@ class Gateway:
             self.db.commit()
             return response
         finally:
+            self.active_device = None
             if acquired:
                 self.radio.release()
             self.command_pending = False
@@ -220,7 +227,7 @@ def main() -> None:
     parser.add_argument("--config", required=True, type=Path)
     args = parser.parse_args()
     os.umask(0o077)
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s:%(name)s:%(message)s")
     config = json.loads(args.config.read_text())
     if config["bind"] in ("0.0.0.0", "::"):
         raise ValueError("请绑定具体家庭局域网接口")
