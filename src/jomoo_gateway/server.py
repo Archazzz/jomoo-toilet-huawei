@@ -17,26 +17,12 @@ from uuid import UUID
 from aiohttp import web
 
 from .control import UnconfirmedAction, operate
+from .features249734 import ACTIONS
 from .transport import LocalTransport
 
 LOGGER = logging.getLogger(__name__)
 COMMAND_WAIT_SECONDS = 10
 LID_ACTIONS = frozenset({"lid_open", "lid_close"})
-
-
-ACTIONS = frozenset(
-    {
-        f"{name}_{value}"
-        for name, values in {
-            "foot_sensor": ("on", "off"),
-            "automatic_lid": ("on", "off"),
-            "automatic_night_light": ("on", "off"),
-            "lid": ("open", "close"),
-            "ring": ("open", "close"),
-        }.items()
-        for value in values
-    }
-)
 
 
 class Gateway:
@@ -66,6 +52,10 @@ class Gateway:
         self.db = sqlite3.connect(ledger)
         self.db.execute(
             "CREATE TABLE IF NOT EXISTS commands (id TEXT PRIMARY KEY, request TEXT, result TEXT)"
+        )
+        self.db.execute(
+            "CREATE TABLE IF NOT EXISTS cooldowns (device TEXT, kind TEXT, until REAL, "
+            "PRIMARY KEY(device,kind))"
         )
         self.db.commit()
         os.chmod(ledger, 0o600)
@@ -110,6 +100,7 @@ class Gateway:
                 async with asyncio.timeout(85):
                     result = await self.operation(self.devices[key]["identifier"])
                 self.states[key] = {"available": True, "observed_at": time.time(), **result}
+                self._observe_cooldowns(key, result.get("state", {}))
                 LOGGER.info("设备 %s 读取成功", key)
             except Exception as exc:
                 LOGGER.warning("设备 %s 读取失败：%s", key, type(exc).__name__)
@@ -134,8 +125,7 @@ class Gateway:
         if self.command_pending and not (
             self.commands_in_flight == 1
             and self.active_device == key
-            and self.active_action in LID_ACTIONS
-            and action in LID_ACTIONS
+            and ((self.active_action in LID_ACTIONS and action in LID_ACTIONS) or action == "stop")
         ):
             LOGGER.info("设备 %s 拒绝动作 %s：控制等待位已满或目标不符", key, action)
             return 409, {"error": "已有控制请求，等待位已满或目标不同"}
@@ -157,6 +147,16 @@ class Gateway:
             previous = self.previous_result(command_id, request)
             if previous is not None:
                 return previous
+            kind = {"flush_large": "flush", "flush_small": "flush", "foam_start": "foam"}.get(
+                action
+            )
+            if kind:
+                row = self.db.execute(
+                    "SELECT until FROM cooldowns WHERE device=? AND kind=?", (key, kind)
+                ).fetchone()
+                if row and time.time() < row[0]:
+                    return 409, {"error": "冲水或发泡仍在冷却期，未发送动作"}
+                self._cooldown(key, kind)
             self.db.execute("INSERT INTO commands VALUES (?,?,NULL)", (command_id, request))
             self.db.commit()
             # Keep the last confirmed state while waiting; executing is not offline.
@@ -174,6 +174,10 @@ class Gateway:
                 async with asyncio.timeout(85):
                     result = await self.operation(self.devices[key]["identifier"], action)
                 self.states[key] = {"available": True, "observed_at": time.time(), **result}
+                self._observe_cooldowns(key, result.get("state", {}))
+                if result.get("state", {}).get("idle_confirmed") is False:
+                    self.refresh_first = key
+                    self.poll_wakeup.set()
                 response = (200, result)
                 LOGGER.info(
                     "设备 %s 动作 %s 完成：%s，耗时 %.0f ms",
@@ -204,6 +208,28 @@ class Gateway:
                 self.radio.release()
             self.commands_in_flight -= 1
 
+    def _cooldown(self, key: str, kind: str) -> None:
+        self.db.execute(
+            "INSERT INTO cooldowns VALUES (?,?,?) ON CONFLICT(device,kind) "
+            "DO UPDATE SET until=max(until,excluded.until)",
+            (key, kind, time.time() + 30),
+        )
+        self.db.commit()
+
+    def _observe_cooldowns(self, key: str, state: dict) -> None:
+        if state.get("large_flush_running") or state.get("small_flush_running"):
+            self._cooldown(key, "flush")
+        if state.get("foam_running"):
+            self._cooldown(key, "foam")
+
+    def poll_delay(self) -> float:
+        if any(
+            s.get("available") and s.get("state", {}).get("idle_confirmed") is False
+            for s in self.states.values()
+        ):
+            return min(3, self.poll_interval)
+        return self.poll_interval
+
     async def poll(self) -> None:
         if sys.platform == "darwin":
             from CoreBluetooth import CBManager
@@ -224,7 +250,7 @@ class Gateway:
             for key in order:
                 await self.read(key)
             try:
-                async with asyncio.timeout(self.poll_interval):
+                async with asyncio.timeout(self.poll_delay()):
                     await self.poll_wakeup.wait()
             except TimeoutError:
                 pass

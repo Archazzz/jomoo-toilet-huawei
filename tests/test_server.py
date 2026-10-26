@@ -286,3 +286,37 @@ def test_failed_command_wakes_read_only_recovery_without_replay(tmp_path, monkey
         gateway.db.close()
 
     asyncio.run(run())
+
+
+def test_flush_cooldown_survives_reopen_and_blocks_other_flush_size(tmp_path):
+    async def run():
+        calls = []
+
+        async def operation(identifier, action=None):
+            calls.append(action)
+            raise TimeoutError("possible write; no repeat")
+
+        cfg = config()
+        cfg["devices"]["a"]["actions"] += ["flush_large", "flush_small"]
+        path = tmp_path / "ledger.db"
+        gateway = Gateway(cfg, path, operation)
+        first = {**command(), "action": "flush_large"}
+        assert (await gateway.dispatch(first))[0] == 502
+        gateway.db.close()
+        gateway = Gateway(cfg, path, operation)
+        assert (await gateway.dispatch({**command(), "action": "flush_small"}))[0] == 409
+        assert calls == ["flush_large"]
+        assert (await gateway.dispatch(first))[0] == 502  # Persistent dedup remains exact.
+        gateway.db.close()
+
+    asyncio.run(run())
+
+
+def test_running_state_speeds_only_read_polling(tmp_path):
+    gateway = Gateway(config(), tmp_path / "ledger.db")
+    assert gateway.poll_delay() == gateway.poll_interval
+    gateway.states["a"] = {"available": True, "state": {"idle_confirmed": False}}
+    assert gateway.poll_delay() == 3
+    gateway.states["a"]["state"]["idle_confirmed"] = True
+    assert gateway.poll_delay() == gateway.poll_interval
+    gateway.db.close()
