@@ -104,9 +104,9 @@ def test_busy_expired_unknown_and_unfinished_commands_never_execute(tmp_path):
         assert (await gateway.dispatch({**command(), "issued_at": time.time() - 30}))[0] == 400
         assert (await gateway.dispatch({**command(), "action": "flush"}))[0] == 400
         async with gateway.radio:
-            gateway.command_pending = True
+            gateway.commands_in_flight = 1
             assert (await gateway.dispatch(command()))[0] == 409
-        gateway.command_pending = False
+        gateway.commands_in_flight = 0
         # Simulate the crash window after journal commit, before any known result.
         import json
 
@@ -145,7 +145,7 @@ def test_auth_and_no_actuation_on_boot_or_read(tmp_path):
     asyncio.run(run())
 
 
-def test_control_waits_for_read_but_never_queues_behind_another_action(tmp_path):
+def test_only_one_control_can_wait_behind_a_read(tmp_path):
     async def run():
         reading = asyncio.Event()
         release = asyncio.Event()
@@ -168,6 +168,82 @@ def test_control_waits_for_read_but_never_queues_behind_another_action(tmp_path)
         await read
         assert (await action)[0] == 200
         assert calls == [None, "lid_open"]
+        gateway.db.close()
+
+    asyncio.run(run())
+
+
+def test_one_lid_request_can_follow_same_device_without_replaying(tmp_path):
+    async def run():
+        started, release = asyncio.Event(), asyncio.Event()
+        calls = []
+
+        async def operation(identifier, action=None):
+            calls.append(action)
+            if len(calls) == 1:
+                started.set()
+                await release.wait()
+            return {"state": {"lid": "open" if action == "lid_open" else "closed"}}
+
+        gateway = Gateway(config(), tmp_path / "ledger.db", operation)
+        first = asyncio.create_task(gateway.dispatch(command()))
+        await started.wait()
+        close = {**command(), "action": "lid_close"}
+        second = asyncio.create_task(gateway.dispatch(close))
+        await asyncio.sleep(0)
+        assert gateway.commands_in_flight == 2
+        assert (await gateway.dispatch(command()))[0] == 409
+        assert (await gateway.dispatch(command("b")))[0] == 409
+        release.set()
+        assert (await first)[0] == 200
+        assert (await second)[0] == 200
+        assert calls == ["lid_open", "lid_close"]
+        assert (await gateway.dispatch(close))[0] == 200
+        assert calls == ["lid_open", "lid_close"]
+        assert not gateway.command_pending
+        assert not gateway.snapshot()["a"]["busy"]
+        gateway.db.close()
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("expired", [False, True])
+def test_waiting_lid_timeout_or_expiry_never_executes(tmp_path, monkeypatch, expired):
+    from jomoo_gateway import server
+
+    monkeypatch.setattr(server, "COMMAND_WAIT_SECONDS", 0.02 if not expired else 1)
+    now = [time.time()]
+    monkeypatch.setattr(server.time, "time", lambda: now[0])
+
+    async def run():
+        started, release = asyncio.Event(), asyncio.Event()
+        calls = []
+
+        async def operation(identifier, action=None):
+            calls.append(action)
+            started.set()
+            await release.wait()
+            return {"state": {"lid": "open"}}
+
+        gateway = Gateway(config(), tmp_path / "ledger.db", operation)
+        first = asyncio.create_task(gateway.dispatch(command()))
+        await started.wait()
+        close = {**command(), "action": "lid_close", "issued_at": now[0] - 14}
+        second = asyncio.create_task(gateway.dispatch(close))
+        await asyncio.sleep(0)
+        if expired:
+            now[0] += 2
+            release.set()
+            assert (await second)[0] == 400
+        else:
+            assert (await second)[0] == 409
+            assert gateway.active_device == "a"  # Waiting timeout cannot clear active state.
+            assert gateway.snapshot()["a"]["busy"]
+            release.set()
+        assert (await first)[0] == 200
+        assert calls == ["lid_open"]
+        assert gateway.db.execute("SELECT COUNT(*) FROM commands").fetchone()[0] == 1
+        assert not gateway.command_pending
         gateway.db.close()
 
     asyncio.run(run())

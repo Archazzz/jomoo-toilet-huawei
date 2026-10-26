@@ -1,6 +1,7 @@
 """Fresh-state sessions with one actuator write, read-back, and no command replay."""
 
 import asyncio
+import logging
 import time
 
 from bleak import BleakClient
@@ -10,14 +11,24 @@ from .model249734 import Snapshot, UnsafeState
 from .protocol import STATUS_QUERY, FrameStream
 
 CHARACTERISTIC = "0000ffe1-0000-1000-8000-00805f9b34fb"
+LOGGER = logging.getLogger(__name__)
 
 
 class UnconfirmedAction(DiagnosticError):
     """A write may have reached hardware; never retry it automatically."""
 
 
-async def operate(identifier: str, action: str | None = None) -> dict:
-    device = await verified_target(identifier)
+async def operate(identifier: str, action: str | None = None, *, target_resolver=None) -> dict:
+    started = time.monotonic()
+    device = await (target_resolver or verified_target)(identifier)
+    resolved_at = time.monotonic()
+    timings = {"discovery": round((resolved_at - started) * 1000)}
+
+    def result(**data):
+        timings["session"] = round((time.monotonic() - started) * 1000)
+        LOGGER.info("蓝牙会话 %s 阶段耗时 ms：%s", action or "read", timings)
+        return {**data, "timing_ms": dict(timings)}
+
     stream = FrameStream()
     frames = {}
     received = {}
@@ -30,6 +41,8 @@ async def operate(identifier: str, action: str | None = None) -> dict:
 
     async with asyncio.timeout(65):
         async with BleakClient(device, timeout=20) as client:
+            connected_at = time.monotonic()
+            timings["connection"] = round((connected_at - resolved_at) * 1000)
             char = client.services.get_characteristic(CHARACTERISTIC)
             if char is None or not {"notify", "write-without-response"} <= set(char.properties):
                 raise DiagnosticError("GATT 能力不符合 249734 配置")
@@ -49,14 +62,16 @@ async def operate(identifier: str, action: str | None = None) -> dict:
                 raise DiagnosticError("状态查询超时；未使用缓存补齐")
 
             before = await read()
+            timings["initial_read"] = round((time.monotonic() - connected_at) * 1000)
             if action is None:
-                return {"state": before.fields(), "outcome": "read"}
+                return result(state=before.fields(), outcome="read")
             packet = before.packet(action)
             if all(before.fields()[k] == v for k, v in before.target(action).items()):
-                return {"state": before.fields(), "outcome": "already_satisfied"}
+                return result(state=before.fields(), outcome="already_satisfied")
             if time.monotonic() - min(received[c] for c in (0xFA, 0xE9, 0xEA)) > 10:
                 raise DiagnosticError("状态已过期，未发送动作")
             try:
+                submitted_at = time.monotonic()
                 await client.write_gatt_char(char, packet, response=False)
             except Exception as exc:
                 raise UnconfirmedAction("写入结果未知；未重试") from exc
@@ -72,12 +87,13 @@ async def operate(identifier: str, action: str | None = None) -> dict:
                         last_mismatch = exc
                         continue
                     if verified:
-                        return {
-                            "state": after.fields(),
-                            "outcome": "verified",
-                            "verification": "target_and_known_settings",
-                            "uninterpreted_changes": before.uninterpreted_changes(after),
-                        }
+                        timings["confirmation"] = round((time.monotonic() - submitted_at) * 1000)
+                        return result(
+                            state=after.fields(),
+                            outcome="verified",
+                            verification="target_and_known_settings",
+                            uninterpreted_changes=before.uninterpreted_changes(after),
+                        )
             except Exception as exc:
                 raise UnconfirmedAction("动作已发送，但回读未通过；未重试") from exc
             raise UnconfirmedAction("动作已发送，但未观察到稳定目标状态；未重试") from last_mismatch

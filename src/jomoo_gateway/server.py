@@ -17,8 +17,11 @@ from uuid import UUID
 from aiohttp import web
 
 from .control import operate
+from .transport import LocalTransport
 
 LOGGER = logging.getLogger(__name__)
+COMMAND_WAIT_SECONDS = 10
+LID_ACTIONS = frozenset({"lid_open", "lid_close"})
 
 
 ACTIONS = frozenset(
@@ -52,8 +55,9 @@ class Gateway:
         self.poll_interval = max(30, float(config.get("poll_interval", 60)))
         self.state_ttl = self.poll_interval + 90
         self.radio = asyncio.Lock()
-        self.command_pending = False
+        self.commands_in_flight = 0
         self.active_device: str | None = None
+        self.active_action: str | None = None
         self.states = {}
         self.db = sqlite3.connect(ledger)
         self.db.execute(
@@ -61,6 +65,22 @@ class Gateway:
         )
         self.db.commit()
         os.chmod(ledger, 0o600)
+
+    @property
+    def command_pending(self) -> bool:
+        return self.commands_in_flight > 0
+
+    def previous_result(self, command_id: str, request: str) -> tuple[int, dict] | None:
+        previous = self.db.execute(
+            "SELECT request,result FROM commands WHERE id=?", (command_id,)
+        ).fetchone()
+        if previous:
+            if previous[0] != request:
+                return 409, {"error": "请求标识已被其他动作使用"}
+            if previous[1] is None:
+                return 409, {"error": "先前动作结果未知，不会重放"}
+            return tuple(json.loads(previous[1]))
+        return None
 
     def snapshot(self) -> dict:
         now = time.time()
@@ -77,7 +97,7 @@ class Gateway:
         }
 
     async def read(self, key: str) -> None:
-        # No queue of stale commands behind a long-running BLE operation.
+        # Skip polling when control owns the radio or is waiting for it.
         if self.radio.locked() or self.command_pending:
             return
         async with self.radio:
@@ -99,43 +119,64 @@ class Gateway:
         except (KeyError, ValueError, TypeError, AttributeError):
             return 400, {"error": "非法设备、动作或请求标识"}
         request = json.dumps([key, action, issued])
-        previous = self.db.execute(
-            "SELECT request,result FROM commands WHERE id=?", (command_id,)
-        ).fetchone()
-        if previous:
-            if previous[0] != request:
-                return 409, {"error": "请求标识已被其他动作使用"}
-            if previous[1] is None:
-                return 409, {"error": "先前动作结果未知，不会重放"}
-            return tuple(json.loads(previous[1]))
+        previous = self.previous_result(command_id, request)
+        if previous is not None:
+            return previous
         if not 0 <= time.time() - issued <= 15:
             return 400, {"error": "动作请求已过期或时钟不一致"}
-        if self.command_pending:
-            return 409, {"error": "已有控制动作正在处理，没有排队"}
-        self.command_pending = True
+        # One fresh lid request may follow the same toilet's ongoing lid action.
+        # Other actions, another toilet, and a third request never build a queue.
+        if self.command_pending and not (
+            self.commands_in_flight == 1
+            and self.active_device == key
+            and self.active_action in LID_ACTIONS
+            and action in LID_ACTIONS
+        ):
+            LOGGER.info("设备 %s 拒绝动作 %s：控制等待位已满或目标不符", key, action)
+            return 409, {"error": "已有控制请求，等待位已满或目标不同"}
+        self.commands_in_flight += 1
+        waiting_since = time.monotonic()
         acquired = False
         try:
-            # Only wait for a read already in progress, never behind another action.
             try:
-                async with asyncio.timeout(5):
+                async with asyncio.timeout(COMMAND_WAIT_SECONDS):
                     await self.radio.acquire()
                     acquired = True
             except TimeoutError:
-                return 409, {"error": "蓝牙读取尚未结束，未发送控制"}
+                LOGGER.info("设备 %s 拒绝动作 %s：等待蓝牙超时，未发送", key, action)
+                return 409, {"error": "等待蓝牙超时，未发送控制"}
             if not 0 <= time.time() - issued <= 15:
+                LOGGER.info("设备 %s 拒绝动作 %s：等待后已过期，未发送", key, action)
                 return 400, {"error": "等待期间动作过期，未发送控制"}
+            # A concurrent duplicate may have completed while this request waited.
+            previous = self.previous_result(command_id, request)
+            if previous is not None:
+                return previous
             self.db.execute("INSERT INTO commands VALUES (?,?,NULL)", (command_id, request))
             self.db.commit()
             # Keep the last confirmed state while waiting; executing is not offline.
             # Its original timestamp still expires normally, and no target is guessed.
             self.active_device = key
-            LOGGER.info("设备 %s 开始动作 %s", key, action)
+            self.active_action = action
+            operation_started = time.monotonic()
+            LOGGER.info(
+                "设备 %s 开始动作 %s，等待 %.0f ms",
+                key,
+                action,
+                (operation_started - waiting_since) * 1000,
+            )
             try:
                 async with asyncio.timeout(85):
                     result = await self.operation(self.devices[key]["identifier"], action)
                 self.states[key] = {"available": True, "observed_at": time.time(), **result}
                 response = (200, result)
-                LOGGER.info("设备 %s 动作 %s 完成：%s", key, action, result.get("outcome"))
+                LOGGER.info(
+                    "设备 %s 动作 %s 完成：%s，耗时 %.0f ms",
+                    key,
+                    action,
+                    result.get("outcome"),
+                    (time.monotonic() - operation_started) * 1000,
+                )
             except Exception as exc:
                 LOGGER.warning("设备 %s 动作未确认：%s", key, type(exc).__name__)
                 response = (502, {"error": "动作未确认；请查看设备，不会自动重试"})
@@ -146,10 +187,11 @@ class Gateway:
             self.db.commit()
             return response
         finally:
-            self.active_device = None
             if acquired:
+                self.active_device = None
+                self.active_action = None
                 self.radio.release()
-            self.command_pending = False
+            self.commands_in_flight -= 1
 
     async def poll(self) -> None:
         if sys.platform == "darwin":
@@ -231,7 +273,7 @@ def main() -> None:
     config = json.loads(args.config.read_text())
     if config["bind"] in ("0.0.0.0", "::"):
         raise ValueError("请绑定具体家庭局域网接口")
-    gateway = Gateway(config, args.config.parent / "commands.sqlite3")
+    gateway = Gateway(config, args.config.parent / "commands.sqlite3", LocalTransport())
     web.run_app(
         create_app(gateway),
         host=config["bind"],
