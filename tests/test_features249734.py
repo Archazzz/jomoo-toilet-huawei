@@ -76,8 +76,18 @@ def test_unoccupied_operations_never_accept_idle_as_started(action):
             state(lid=9).packet(action)
     else:
         state(lid=9).packet(action)  # Automatic opening must not block ordinary flush/foam.
-    with pytest.raises(UnsafeState):
-        state(occupied=True).packet(action)
+    if action == "self_clean":
+        with pytest.raises(UnsafeState):
+            state(occupied=True).packet(action)
+    else:
+        state(occupied=True, lid=9).packet(action)
+        for busy in (
+            state(occupied=True, lid=9, work=0x20),
+            state(occupied=True, lid=9, work=16),
+            state(occupied=True, lid=9, extra=1),
+        ):
+            with pytest.raises(UnsafeState):
+                busy.packet(action)
 
 
 def test_all_movement_rejects_flush_foam_and_automatic_activity_even_with_standby_byte():

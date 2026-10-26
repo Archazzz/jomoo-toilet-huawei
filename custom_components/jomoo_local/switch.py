@@ -65,6 +65,9 @@ class JomooSwitch(JomooEntity, SwitchEntity):
             "jomoo_state": self.state_data,
             "jomoo_actions": self.device_data.get("actions", []),
             "jomoo_expires_at": self.device_data.get("expires_at", 0),
+            "jomoo_busy": bool(
+                self.device_data.get("busy") or self.coordinator.pending_commands.get(self.key)
+            ),
         }
 
     async def async_turn_on(self, **kwargs):

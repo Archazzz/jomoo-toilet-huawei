@@ -200,6 +200,11 @@ class Snapshot:
                     raise UnsafeState("当前工作模式不支持调整档位")
             else:
                 self.idle()
+        elif action in {"flush_large", "flush_small", "foam_start"}:
+            # Occupancy alone must not block bowl flushing or foam. Active wash,
+            # drying, maintenance and motion remain incompatible operations.
+            if not state["idle_confirmed"]:
+                raise UnsafeState("已有工作流程或机构运动，不能冲水或发泡")
         else:
             self.idle()
             if action == "self_clean" and state["lid"] != "closed":

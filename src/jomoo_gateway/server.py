@@ -50,6 +50,7 @@ class Gateway:
         self.active_action: str | None = None
         self.poll_wakeup = asyncio.Event()
         self.refresh_first: str | None = None
+        self.recovery_reads: dict[str, int] = {}
         self.states = {}
         self.db = sqlite3.connect(ledger)
         self.db.execute(
@@ -103,10 +104,15 @@ class Gateway:
                     result = await self.operation(self.devices[key]["identifier"])
                 self.states[key] = {"available": True, "observed_at": time.time(), **result}
                 self._observe_cooldowns(key, result.get("state", {}))
+                self.recovery_reads.pop(key, None)
                 LOGGER.info("设备 %s 读取成功", key)
             except Exception as exc:
                 LOGGER.warning("设备 %s 读取失败：%s", key, type(exc).__name__)
                 self.states[key] = {"available": False, "error": "读取失败，等待下次只读刷新"}
+                if key in self.recovery_reads:
+                    self.recovery_reads[key] -= 1
+                    if self.recovery_reads[key] <= 0:
+                        del self.recovery_reads[key]
 
     async def dispatch(self, data: dict) -> tuple[int, dict]:
         try:
@@ -216,6 +222,7 @@ class Gateway:
                 self.states[key] = {"available": False, "error": response[1]["error"]}
                 # Wake only the read-only poller, never replay the failed command.
                 self.refresh_first = key
+                self.recovery_reads[key] = 3
                 self.poll_wakeup.set()
             self.db.execute(
                 "UPDATE commands SET result=? WHERE id=?", (json.dumps(response), command_id)
@@ -244,7 +251,7 @@ class Gateway:
             self._cooldown(key, "foam")
 
     def poll_delay(self) -> float:
-        if any(
+        if self.recovery_reads or any(
             s.get("available") and s.get("state", {}).get("idle_confirmed") is False
             for s in self.states.values()
         ):

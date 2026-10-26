@@ -46,6 +46,7 @@ class Coordinator(DataUpdateCoordinator):
         self.url = entry.data["url"].rstrip("/")
         self.headers = {"Authorization": f"Bearer {entry.data['token']}"}
         self.session = async_get_clientsession(hass)
+        self.pending_commands: dict[str, int] = {}
 
     async def request(self, method, path, data=None):
         try:
@@ -71,6 +72,8 @@ class Coordinator(DataUpdateCoordinator):
             raise UpdateFailed(str(exc)) from exc
 
     async def command(self, device, action):
+        self.pending_commands[device] = self.pending_commands.get(device, 0) + 1
+        self.async_update_listeners()
         try:
             await self.request(
                 "POST",
@@ -78,7 +81,23 @@ class Coordinator(DataUpdateCoordinator):
                 {"id": str(uuid4()), "issued_at": time.time(), "device": device, "action": action},
             )
         finally:
-            await self.async_request_refresh()
+            try:
+                # Keep old cached standby out of cloud reports until fresh state
+                # arrives, including while the HTTP request is still connecting.
+                # Fetch the post-action state synchronously before the bridge
+                # publishes a cloud snapshot; async_request_refresh only queues
+                # a refresh and can race the OneConnect post-ACK callback.
+                try:
+                    fresh = await self._async_update_data()
+                except UpdateFailed:
+                    await self.async_request_refresh()
+                else:
+                    self.async_set_updated_data(fresh)
+            finally:
+                self.pending_commands[device] -= 1
+                if not self.pending_commands[device]:
+                    del self.pending_commands[device]
+                self.async_update_listeners()
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

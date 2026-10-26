@@ -90,6 +90,11 @@ class ToiletServiceAdapter:
         snapshot = self._state(hass, service, entity_ids)
         if snapshot is None:
             return {}
+        if hass.states.get(entity_ids[0]).attributes.get("jomoo_busy") is True:
+            # The last observed state remains available locally, but publishing
+            # it during dispatch would overwrite the phone's pending animation.
+            # Suppress this report; never invent a running/target state.
+            return {}
         state, _actions = snapshot
         if self.service_id == "toiletStatus":
             active = [
