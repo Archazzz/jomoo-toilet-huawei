@@ -380,3 +380,28 @@ def test_close_lid_can_follow_ring_without_retrying_or_queueing_a_third_motion(t
         gateway.db.close()
 
     asyncio.run(run())
+
+
+def test_pre_write_rejection_releases_cooldown_but_external_flush_keeps_it(tmp_path):
+    from jomoo_gateway.control import ActionNotSent
+
+    async def run():
+        calls = []
+
+        async def operation(identifier, action=None):
+            calls.append(action)
+            raise ActionNotSent(
+                "fixture interlock", {"lid": "open", "large_flush_running": len(calls) > 1}
+            )
+
+        cfg = config()
+        cfg["devices"]["a"]["actions"] += ["flush_large", "flush_small"]
+        gateway = Gateway(cfg, tmp_path / "ledger.db", operation)
+        assert (await gateway.dispatch({**command(), "action": "flush_large"}))[0] == 422
+        assert gateway.snapshot()["a"]["available"]
+        assert (await gateway.dispatch({**command(), "action": "flush_small"}))[0] == 422
+        assert (await gateway.dispatch({**command(), "action": "flush_large"}))[0] == 409
+        assert calls == ["flush_large", "flush_small"]
+        gateway.db.close()
+
+    asyncio.run(run())

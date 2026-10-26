@@ -199,3 +199,11 @@ def test_idle_telemetry_requires_observed_standby_without_other_activity():
             "idle_confirmed"
         ]
     assert snapshot(lid=0x45).fields()["idle_confirmed"] is False
+
+
+def test_fresh_preflight_rejection_is_not_an_uncertain_write(monkeypatch):
+    writes = install_client(monkeypatch)
+    with pytest.raises(control.ActionNotSent) as rejected:
+        asyncio.run(control.operate("device", "wash_hip"))
+    assert rejected.value.state["seated"] is False
+    assert writes == [STATUS_QUERY]

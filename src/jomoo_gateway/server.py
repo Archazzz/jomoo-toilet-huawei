@@ -16,7 +16,7 @@ from uuid import UUID
 
 from aiohttp import web
 
-from .control import UnconfirmedAction, operate
+from .control import ActionNotSent, UnconfirmedAction, operate
 from .features249734 import ACTIONS
 from .transport import LocalTransport
 
@@ -189,6 +189,19 @@ class Gateway:
                     result.get("outcome"),
                     (time.monotonic() - operation_started) * 1000,
                 )
+            except ActionNotSent as exc:
+                # A proven pre-write rejection is not an uncertain actuator result.
+                # Release only this reservation; observed external activity re-arms it.
+                if kind:
+                    self.db.execute("DELETE FROM cooldowns WHERE device=? AND kind=?", (key, kind))
+                self._observe_cooldowns(key, exc.state)
+                self.states[key] = {
+                    "available": True,
+                    "observed_at": time.time(),
+                    "state": exc.state,
+                }
+                response = (422, {"error": str(exc), "outcome": "not_sent"})
+                LOGGER.info("设备 %s 动作 %s 未发送：%s", key, action, exc)
             except Exception as exc:
                 LOGGER.warning("设备 %s 动作未确认：%s", key, type(exc).__name__)
                 response = (502, {"error": "动作未确认；请查看设备，不会自动重试"})

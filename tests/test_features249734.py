@@ -63,12 +63,15 @@ def test_setting_boundaries_preserve_other_settings_and_detect_collateral_change
 
 
 @pytest.mark.parametrize("action", ["flush_large", "flush_small", "foam_start", "self_clean"])
-def test_unoccupied_maintenance_requires_closed_lid_and_never_accepts_idle_as_started(action):
+def test_unoccupied_operations_never_accept_idle_as_started(action):
     before = state()
     before.packet(action)
     assert not before.verify(before, action)
-    with pytest.raises(UnsafeState):
-        state(lid=9).packet(action)
+    if action == "self_clean":
+        with pytest.raises(UnsafeState):
+            state(lid=9).packet(action)
+    else:
+        state(lid=9).packet(action)  # Automatic opening must not block ordinary flush/foam.
     with pytest.raises(UnsafeState):
         state(occupied=True).packet(action)
 

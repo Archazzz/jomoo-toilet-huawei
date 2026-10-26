@@ -192,10 +192,7 @@ class Snapshot:
             self.idle()
         else:
             self.idle()
-            if (
-                action in {"flush_large", "flush_small", "foam_start", "self_clean"}
-                and state["lid"] != "closed"
-            ):
+            if action == "self_clean" and state["lid"] != "closed":
                 raise UnsafeState("此操作要求先合盖")
             if action in {"nozzle_clean", "nozzle_replace"} and (state["lid"], state["ring"]) != (
                 "open",

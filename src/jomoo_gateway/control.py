@@ -14,6 +14,14 @@ CHARACTERISTIC = "0000ffe1-0000-1000-8000-00805f9b34fb"
 LOGGER = logging.getLogger(__name__)
 
 
+class ActionNotSent(DiagnosticError):
+    """Fresh-state validation rejected an action before any actuator write."""
+
+    def __init__(self, reason: str, state: dict) -> None:
+        super().__init__(reason)
+        self.state = state
+
+
 class UnconfirmedAction(DiagnosticError):
     """A write may have reached hardware; never retry it automatically."""
 
@@ -69,7 +77,10 @@ async def operate(identifier: str, action: str | None = None, *, target_resolver
             timings["initial_read"] = round((time.monotonic() - connected_at) * 1000)
             if action is None:
                 return result(state=before.fields(), outcome="read")
-            packet = before.packet(action)
+            try:
+                packet = before.packet(action)
+            except UnsafeState as exc:
+                raise ActionNotSent(str(exc), before.fields()) from exc
             if all(before.fields()[k] == v for k, v in before.target(action).items()):
                 return result(state=before.fields(), outcome="already_satisfied")
             if time.monotonic() - min(received[c] for c in (0xFA, 0xE9, 0xEA)) > 10:
