@@ -82,5 +82,21 @@
     "verification": "README and selected source reviewed; not installed or hardware-tested here",
     "commit_verified_via": "GitHub commits/master",
     "tree_sha": "bdd1159b868a17c2945a7fb398dd07cfb0b0af95"
+  },
+  {
+    "repository": "xiasi0/ha-oneconnect-bridge",
+    "url": "https://github.com/xiasi0/ha-oneconnect-bridge",
+    "commit": "95b63b78ae4963e942920e839c5b802697503690",
+    "license_reported": "Apache-2.0",
+    "accessed_date": "2026-10-27",
+    "verification": "README, default mapping, adapter registry and contribution docs reviewed; not installed or hardware-tested"
+  },
+  {
+    "repository": "chaosl1996/ha-oneconnect-bridge",
+    "url": "https://github.com/chaosl1996/ha-oneconnect-bridge",
+    "commit": "869db4260a4071893a045cad0539a3172b5892bc",
+    "license_reported": "Apache-2.0",
+    "accessed_date": "2026-10-27",
+    "verification": "README reviewed; not installed or hardware-tested"
   }
 ]
