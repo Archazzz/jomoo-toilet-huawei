@@ -1,0 +1,181 @@
+{
+  "schema": 1,
+  "enabled": false,
+  "gateway_serial": "",
+  "children": {
+    "toilet_a": {
+      "product": {
+        "prod_id": "2QBR",
+        "sub_prod_id": "00",
+        "device_type": "123",
+        "manufacturer": "cfe",
+        "model": "ZD6450-SA-CJM305",
+        "friendly_name": "马桶 A",
+        "protocol_type": 1,
+        "setup_type": 0,
+        "known_fields_only": false,
+        "services": [
+          {
+            "st": "action",
+            "sid": "offSeatAction"
+          },
+          {
+            "st": "status",
+            "sid": "toiletLidStatus"
+          },
+          {
+            "st": "status",
+            "sid": "seatStatus"
+          },
+          {
+            "st": "toiletSeat",
+            "sid": "toiletSetting"
+          },
+          {
+            "st": "toiletSeat",
+            "sid": "drySetting"
+          },
+          {
+            "st": "toiletSeat",
+            "sid": "washSetting"
+          },
+          {
+            "st": "toiletSeat",
+            "sid": "seatHeating"
+          }
+        ]
+      },
+      "bindings": [
+        {
+          "sid": "offSeatAction",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "toiletLidStatus",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "seatStatus",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "toiletSetting",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "drySetting",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "washSetting",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        },
+        {
+          "sid": "seatHeating",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_A_LID"
+          ]
+        }
+      ]
+    },
+    "toilet_b": {
+      "product": {
+        "prod_id": "2QBR",
+        "sub_prod_id": "00",
+        "device_type": "123",
+        "manufacturer": "cfe",
+        "model": "ZD6450-SA-CJM305",
+        "friendly_name": "马桶 B",
+        "protocol_type": 1,
+        "setup_type": 0,
+        "known_fields_only": false,
+        "services": [
+          {
+            "st": "action",
+            "sid": "offSeatAction"
+          },
+          {
+            "st": "status",
+            "sid": "toiletLidStatus"
+          },
+          {
+            "st": "status",
+            "sid": "seatStatus"
+          },
+          {
+            "st": "toiletSeat",
+            "sid": "toiletSetting"
+          },
+          {
+            "st": "toiletSeat",
+            "sid": "drySetting"
+          },
+          {
+            "st": "toiletSeat",
+            "sid": "washSetting"
+          },
+          {
+            "st": "toiletSeat",
+            "sid": "seatHeating"
+          }
+        ]
+      },
+      "bindings": [
+        {
+          "sid": "offSeatAction",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "toiletLidStatus",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "seatStatus",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "toiletSetting",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "drySetting",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "washSetting",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        },
+        {
+          "sid": "seatHeating",
+          "entities": [
+            "switch.REPLACE_WITH_TOILET_B_LID"
+          ]
+        }
+      ]
+    }
+  }
+}

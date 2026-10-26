@@ -91,6 +91,7 @@ class Gateway:
                 "name": device["name"],
                 "actions": device["actions"],
                 **self.states.get(key, {}),
+                "expires_at": self.states.get(key, {}).get("observed_at", 0) + self.state_ttl,
                 "busy": self.active_device == key,
                 "available": bool(self.states.get(key, {}).get("available"))
                 and now - self.states.get(key, {}).get("observed_at", 0) < self.state_ttl,

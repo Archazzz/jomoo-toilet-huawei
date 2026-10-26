@@ -46,6 +46,19 @@ class JomooSwitch(JomooEntity, SwitchEntity):
         value = self.state_data.get(self.feature)
         return value is True if self.feature in BOOLEAN_FEATURES else value == "open"
 
+    @property
+    def extra_state_attributes(self):
+        if self.feature != "lid":
+            return None
+        # One bound entity carries the same toilet's telemetry for multi-service cards.
+        # Never expose its BLE identity, gateway token, or command journal here.
+        return {
+            "jomoo_model": "249734",
+            "jomoo_state": self.state_data,
+            "jomoo_actions": self.device_data.get("actions", []),
+            "jomoo_expires_at": self.device_data.get("expires_at", 0),
+        }
+
     async def async_turn_on(self, **kwargs):
         await self.coordinator.command(self.key, self.on_action)
 
