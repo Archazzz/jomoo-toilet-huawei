@@ -351,3 +351,32 @@ def test_stop_can_wait_once_for_same_toilet_but_never_interrupts_other_device(tm
         gateway.db.close()
 
     asyncio.run(run())
+
+
+def test_close_lid_can_follow_ring_without_retrying_or_queueing_a_third_motion(tmp_path):
+    async def run():
+        started, release = asyncio.Event(), asyncio.Event()
+        actions = []
+
+        async def operation(identifier, action=None):
+            actions.append(action)
+            if action == "ring_close":
+                started.set()
+                await release.wait()
+            return {"state": {"lid": "open" if action == "ring_close" else "closed"}}
+
+        cfg = config()
+        cfg["devices"]["a"]["actions"].append("ring_close")
+        gateway = Gateway(cfg, tmp_path / "ledger.db", operation)
+        first = asyncio.create_task(gateway.dispatch({**command(), "action": "ring_close"}))
+        await started.wait()
+        second = asyncio.create_task(gateway.dispatch({**command(), "action": "lid_close"}))
+        await asyncio.sleep(0)
+        assert actions == ["ring_close"]
+        assert (await gateway.dispatch(command()))[0] == 409
+        release.set()
+        assert (await first)[0] == (await second)[0] == 200
+        assert actions == ["ring_close", "lid_close"]
+        gateway.db.close()
+
+    asyncio.run(run())

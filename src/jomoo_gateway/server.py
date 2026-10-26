@@ -22,7 +22,7 @@ from .transport import LocalTransport
 
 LOGGER = logging.getLogger(__name__)
 COMMAND_WAIT_SECONDS = 10
-LID_ACTIONS = frozenset({"lid_open", "lid_close"})
+MECHANICAL_ACTIONS = frozenset({"lid_open", "lid_close", "ring_open", "ring_close"})
 
 
 class Gateway:
@@ -120,12 +120,15 @@ class Gateway:
             return previous
         if not 0 <= time.time() - issued <= 15:
             return 400, {"error": "动作请求已过期或时钟不一致"}
-        # One fresh lid request may follow the same toilet's ongoing lid action.
+        # One fresh cover/ring request or stop may follow the same toilet's action.
         # Other actions, another toilet, and a third request never build a queue.
         if self.command_pending and not (
             self.commands_in_flight == 1
             and self.active_device == key
-            and ((self.active_action in LID_ACTIONS and action in LID_ACTIONS) or action == "stop")
+            and (
+                (self.active_action in MECHANICAL_ACTIONS and action in MECHANICAL_ACTIONS)
+                or action == "stop"
+            )
         ):
             LOGGER.info("设备 %s 拒绝动作 %s：控制等待位已满或目标不符", key, action)
             return 409, {"error": "已有控制请求，等待位已满或目标不同"}
