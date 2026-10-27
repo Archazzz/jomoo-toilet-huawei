@@ -20,7 +20,8 @@ jobs:
       - run: git diff --check
 
   report-ui:
-    runs-on: ubuntu-latest
+    # Keep the OS compatible with the pinned Playwright browser/dependency bundle.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
