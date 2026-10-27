@@ -18,3 +18,27 @@ jobs:
       - run: ruff format --check src tests tools custom_components
       - run: pytest -q
       - run: git diff --check
+
+  report-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.25.0'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm run check:format
+      - run: pnpm run test:report
+      - run: python tools/build_usage_report.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: usage-report-module
+          path: dist/jomoo-usage-report.zip
