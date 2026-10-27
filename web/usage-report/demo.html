@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <title>马桶卡片 · 使用报告预览</title>
+    <link rel="stylesheet" href="report.css" />
+  </head>
+  <body>
+    <aside class="demo-bar">
+      <span id="preview-label">本地卡片原型 · 合成演示数据</span
+      ><label
+        >设备
+        <select id="device">
+          <option value="main">主卫九牧马桶</option>
+          <option value="guest">客卫九牧马桶</option>
+        </select></label
+      ><label
+        >场景
+        <select id="scenario">
+          <option value="normal">正常报告</option>
+          <option value="empty">尚无数据</option>
+          <option value="error">服务不可用</option>
+          <option value="slow">加载中</option>
+        </select></label
+      >
+    </aside>
+    <main id="report"></main>
+    <script type="module" src="demo.js"></script>
+  </body>
+</html>
