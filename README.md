@@ -26,6 +26,7 @@
 - [本地网关和 HA 集成部署](docs/local-gateway.md)
 - [新增参数设置及验收边界](docs/parameter-settings.md)
 - [多功能扩展与逐项验收](docs/expanded-controls.md)
+- [如厕使用报告与卡片扩展可行性](docs/usage-report-research.md)
 - [单卡片桥接实验与可复现构建](docs/oneconnect-experiment.md)
 - [上游固定版本](research/repositories.json)
 
