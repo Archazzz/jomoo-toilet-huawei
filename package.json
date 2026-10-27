@@ -1,0 +1,14 @@
+{
+  "name": "jomoo-in-card-usage-report",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "format": "prettier --write web/usage-report tools/check_usage_report.cjs",
+    "check:format": "prettier --check web/usage-report tools/check_usage_report.cjs",
+    "test:report": "node tools/check_usage_report.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1",
+    "prettier": "3.6.2"
+  }
+}

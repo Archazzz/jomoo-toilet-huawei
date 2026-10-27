@@ -27,6 +27,8 @@
 - [新增参数设置及验收边界](docs/parameter-settings.md)
 - [多功能扩展与逐项验收](docs/expanded-controls.md)
 - [如厕使用报告与卡片扩展可行性](docs/usage-report-research.md)
+- [卡片内使用报告模块、预览与发布关卡](docs/in-card-usage-report.md)
+- [家庭报告中心、自有卡片与授权边界](docs/family-report-center-research.md)
 - [单卡片桥接实验与可复现构建](docs/oneconnect-experiment.md)
 - [上游固定版本](research/repositories.json)
 
@@ -43,6 +45,12 @@
 - 旧桥接与四个旧子设备入口已移除，旧父网关离线卡片可在手机删除。
 - 华为兼容库目前安装在 Core 容器内，更新或重建容器可能导致桥接失效。S2、Mini、小艺控制效果尚未验收。
 - 小艺当前可看到设备但不能直接调用马桶模式；官方 2QBR Profile 声明 `voiceControl=0`，这属于云端产品能力限制。可行的语音替代需要华为云端开放该型号语音能力或由智慧生活场景间接触发，项目不伪造云端技能。
+
+## 使用报告实验分支
+
+`feat/in-card-usage-report` 提供按真实状态采样的使用记录库、每台设备独立的只读报告 API，以及日／周／月冲水和落座趋势、会话明细的原创离线 H5 模块。用 `PYTHONPATH=src python tools/preview_usage_report.py` 启动合成数据预览。
+
+模块以同一设备卡片内的报告子页为目标；**尚未发布进智慧生活的实际九牧卡片**，需要获准的产品页面／插件宿主及数据通道。采集默认关闭，当前家庭设备未切换到本分支。完整说明见[报告模块文档](docs/in-card-usage-report.md)。
 
 ## 扫描
 

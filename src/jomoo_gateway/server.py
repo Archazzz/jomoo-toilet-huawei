@@ -19,6 +19,7 @@ from aiohttp import web
 from .control import ActionNotSent, UnconfirmedAction, operate
 from .features249734 import ACTIONS
 from .transport import LocalTransport
+from .usage import UsageStore
 
 LOGGER = logging.getLogger(__name__)
 COMMAND_WAIT_SECONDS = 10
@@ -62,6 +63,32 @@ class Gateway:
         )
         self.db.commit()
         os.chmod(ledger, 0o600)
+        report_config = config.get("usage_report", {})
+        self.usage = None
+        self.report_tokens = report_config.get("read_tokens", {})
+        for key, token in self.report_tokens.items():
+            if key not in self.devices or not isinstance(token, str) or len(token) < 32:
+                raise ValueError("报告只读令牌必须对应已配置设备且至少 32 字符")
+            if token == self.token or list(self.report_tokens.values()).count(token) != 1:
+                raise ValueError("各设备报告令牌和控制令牌必须不同")
+        if report_config.get("enabled", False):
+            self.usage = UsageStore(
+                ledger.with_name("usage.sqlite3"),
+                max_gap=float(report_config.get("max_gap_seconds", 120)),
+                retention_days=int(report_config.get("retention_days", 90)),
+            )
+            if isinstance(self.operation, LocalTransport):
+                device_keys = {d["identifier"]: k for k, d in self.devices.items()}
+                self.operation.observer = lambda identifier, state: self.record_usage(
+                    device_keys[identifier], state
+                )
+
+    def record_usage(self, key: str, state: dict | None) -> None:
+        if self.usage is not None:
+            try:
+                self.usage.observe(key, state)
+            except Exception as exc:
+                LOGGER.warning("设备 %s 使用记录失败：%s", key, type(exc).__name__)
 
     @property
     def command_pending(self) -> bool:
@@ -104,10 +131,12 @@ class Gateway:
                     result = await self.operation(self.devices[key]["identifier"])
                 self.states[key] = {"available": True, "observed_at": time.time(), **result}
                 self._observe_cooldowns(key, result.get("state", {}))
+                self.record_usage(key, result.get("state"))
                 self.recovery_reads.pop(key, None)
                 LOGGER.info("设备 %s 读取成功", key)
             except Exception as exc:
                 LOGGER.warning("设备 %s 读取失败：%s", key, type(exc).__name__)
+                self.record_usage(key, None)
                 self.states[key] = {"available": False, "error": "读取失败，等待下次只读刷新"}
                 if key in self.recovery_reads:
                     self.recovery_reads[key] -= 1
@@ -189,6 +218,7 @@ class Gateway:
                     result = await self.operation(self.devices[key]["identifier"], action)
                 self.states[key] = {"available": True, "observed_at": time.time(), **result}
                 self._observe_cooldowns(key, result.get("state", {}))
+                self.record_usage(key, result.get("state"))
                 if result.get("state", {}).get("idle_confirmed") is False:
                     self.refresh_first = key
                     self.poll_wakeup.set()
@@ -206,6 +236,7 @@ class Gateway:
                 if kind:
                     self.db.execute("DELETE FROM cooldowns WHERE device=? AND kind=?", (key, kind))
                 self._observe_cooldowns(key, exc.state)
+                self.record_usage(key, exc.state)
                 self.states[key] = {
                     "available": True,
                     "observed_at": time.time(),
@@ -215,6 +246,7 @@ class Gateway:
                 LOGGER.info("设备 %s 动作 %s 未发送：%s", key, action, exc)
             except Exception as exc:
                 LOGGER.warning("设备 %s 动作未确认：%s", key, type(exc).__name__)
+                self.record_usage(key, None)
                 response = (502, {"error": "动作未确认；请查看设备，不会自动重试"})
                 if isinstance(exc, UnconfirmedAction):
                     response[1]["diagnostics"] = exc.details
@@ -288,7 +320,15 @@ def create_app(gateway: Gateway, *, polling=True) -> web.Application:
     @web.middleware
     async def authenticate(request, handler):
         supplied = request.headers.get("Authorization", "")
-        if not hmac.compare_digest(supplied.encode(), f"Bearer {gateway.token}".encode()):
+        control_auth = hmac.compare_digest(supplied.encode(), f"Bearer {gateway.token}".encode())
+        report_token = gateway.report_tokens.get(request.match_info.get("device"))
+        report_auth = (
+            request.method == "GET"
+            and request.match_info.route.name == "usage-report"
+            and report_token is not None
+            and hmac.compare_digest(supplied.encode(), f"Bearer {report_token}".encode())
+        )
+        if not control_auth and not report_auth:
             raise web.HTTPUnauthorized()
         return await handler(request)
 
@@ -316,6 +356,20 @@ def create_app(gateway: Gateway, *, polling=True) -> web.Application:
         await gateway.read(key)
         return web.json_response({"devices": gateway.snapshot()})
 
+    async def usage_report(request):
+        key = request.match_info["device"]
+        if key not in gateway.devices:
+            raise web.HTTPNotFound()
+        if gateway.usage is None:
+            raise web.HTTPServiceUnavailable(text="使用报告采集尚未启用")
+        try:
+            report = gateway.usage.report(
+                key, request.query["start"], int(request.query.get("days", "7"))
+            )
+        except (KeyError, ValueError, OverflowError):
+            raise web.HTTPBadRequest(text="需要 start=YYYY-MM-DD，days 范围 1–31") from None
+        return web.json_response(report, headers={"Cache-Control": "no-store"})
+
     async def lifetime(app):
         task = asyncio.create_task(gateway.poll()) if polling else None
         if task:
@@ -331,9 +385,12 @@ def create_app(gateway: Gateway, *, polling=True) -> web.Application:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
         gateway.db.close()
+        if gateway.usage is not None:
+            gateway.usage.close()
 
     app.cleanup_ctx.append(lifetime)
     app.router.add_get("/v1/states", states)
+    app.router.add_get("/v1/devices/{device}/report", usage_report, name="usage-report")
     app.router.add_post("/v1/commands", command)
     app.router.add_post("/v1/devices/{device}/refresh", refresh)
     return app

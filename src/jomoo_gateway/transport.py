@@ -40,10 +40,14 @@ class LocalTransport:
     def __init__(self, *, targets: RecentTargets | None = None, operation=operate) -> None:
         self.targets = targets if targets is not None else RecentTargets()
         self.operation = operation
+        self.observer = None
 
     async def __call__(self, identifier: str, action: str | None = None) -> dict:
         try:
-            return await self.operation(identifier, action, target_resolver=self.targets)
+            options = {"target_resolver": self.targets}
+            if self.observer is not None:
+                options["observer"] = lambda state: self.observer(identifier, state)
+            return await self.operation(identifier, action, **options)
         except BaseException:
             # A failed/cancelled session invalidates discovery but never retries an action.
             self.targets.forget(identifier)
