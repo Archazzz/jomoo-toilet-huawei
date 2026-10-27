@@ -28,6 +28,7 @@
 - [多功能扩展与逐项验收](docs/expanded-controls.md)
 - [如厕使用报告与卡片扩展可行性](docs/usage-report-research.md)
 - [卡片内使用报告模块、预览与发布关卡](docs/in-card-usage-report.md)
+- [家庭报告中心、自有卡片与授权边界](docs/family-report-center-research.md)
 - [单卡片桥接实验与可复现构建](docs/oneconnect-experiment.md)
 - [上游固定版本](research/repositories.json)
 
