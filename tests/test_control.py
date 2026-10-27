@@ -218,3 +218,18 @@ def test_failed_readback_reports_connection_reason_without_repeating_write(monke
     assert failure.value.details["phase"] == "readback"
     assert "蓝牙断开" in failure.value.details["reason"]
     assert len([p for p in writes if p != STATUS_QUERY]) == 1
+
+
+def test_observer_sees_prewrite_and_readback_without_affecting_control(monkeypatch):
+    writes = install_client(monkeypatch)
+    samples = []
+
+    def observer(state):
+        samples.append(state)
+        if len(samples) == 1:
+            raise OSError("private storage unavailable")
+
+    result = asyncio.run(control.operate("device", "foot_sensor_off", observer=observer))
+    assert result["outcome"] == "verified"
+    assert [s["foot_sensor"] for s in samples] == [True, False]
+    assert len([p for p in writes if p != STATUS_QUERY]) == 1

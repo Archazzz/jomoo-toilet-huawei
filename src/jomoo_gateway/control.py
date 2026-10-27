@@ -30,7 +30,9 @@ class UnconfirmedAction(DiagnosticError):
         self.details = details or {}
 
 
-async def operate(identifier: str, action: str | None = None, *, target_resolver=None) -> dict:
+async def operate(
+    identifier: str, action: str | None = None, *, target_resolver=None, observer=None
+) -> dict:
     started = time.monotonic()
     device = await (target_resolver or verified_target)(identifier)
     resolved_at = time.monotonic()
@@ -72,7 +74,14 @@ async def operate(identifier: str, action: str | None = None, *, target_resolver
                     if not client.is_connected:
                         raise DiagnosticError("读取状态时蓝牙断开")
                     if all(command in frames for command in (0xFA, 0xE9, 0xEA)):
-                        return Snapshot.from_frames(frames)
+                        snapshot = Snapshot.from_frames(frames)
+                        if observer is not None:
+                            try:
+                                observer(snapshot.fields())
+                            except Exception as exc:
+                                # Optional recording must never cause actuator replay/failure.
+                                LOGGER.warning("使用记录失败：%s", type(exc).__name__)
+                        return snapshot
                     await asyncio.sleep(0.1)
                 seen = ", ".join(
                     f"{command:02X}/{length}" for command, length in sorted(observed_frames)
